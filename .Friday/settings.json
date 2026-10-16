@@ -1,0 +1,6 @@
+{
+  "lastChangelogVersion": "1.3.0",
+  "defaultProvider": "pi-router",
+  "defaultModel": "auto",
+  "defaultTools": ["+grep", "+find", "+ls"]
+}

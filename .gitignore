@@ -1,0 +1,17 @@
+# Credentials & Secrets (SEC-CRED)
+.Friday/auth.json
+.env
+.env.*
+!.env.example
+
+# Ephemeral Runtime & Binary Cache inside .Friday Brain
+.Friday/sessions/
+.Friday/bin/
+.Friday/models-store.json
+
+# Python & Node Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+node_modules/

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://friday.pi-agent.local/schemas/context_node.schema.json",
+  "title": "Friday Agentic Harness Context Node & Topology Schema",
+  "description": "漸進式 Context 揭露索引節點與依賴拓撲圖 Schema：支援領域分層碼 (000-900)、多維度標籤、單行摘要與雙向 DAG 依賴拓撲。",
+  "type": "object",
+  "required": [
+    "context_index",
+    "topology"
+  ],
+  "properties": {
+    "context_index": {
+      "type": "object",
+      "required": [
+        "domain_code",
+        "node_key",
+        "facet_tags",
+        "keywords",
+        "summary_1line"
+      ],
+      "properties": {
+        "domain_code": {
+          "type": "string",
+          "pattern": "^[0-9]{3}$",
+          "description": "領域分層碼：000(核心憲法), 100(安全邊界與護欄), 200(ADR架構決策), 300(核心業務邏輯), 400(Extensions與Hooks), 500(動態路由與子代理), 600(驗證與稽核報告), 700(可攜式部署與容器), 800(外部參考規格), 900(歷史封存)"
+        },
+        "node_key": {
+          "type": "string",
+          "pattern": "^[0-9]{3}\\.[A-Z0-9_-]+\\.v[0-9]+$",
+          "description": "唯一節點定位鍵 (例如: 000.SOUL.v1, 100.ARCH-RULES.v1, 200.ADR-001.v1)"
+        },
+        "facet_tags": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$"
+          },
+          "description": "多維度架構屬性標籤：[Domain]:[Subsystem]:[Layer]:[ArtifactType]"
+        },
+        "keywords": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "檢索關鍵字清單"
+        },
+        "summary_1line": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 160,
+          "description": "極簡單行摘要，供 CONTEXT_INDEX.json 漸進式揭露 (Progressive Disclosure) 使用，避免塞爆 Context Window"
+        }
+      },
+      "additionalProperties": false
+    },
+    "topology": {
+      "type": "object",
+      "required": [
+        "depends_on",
+        "supersedes",
+        "conflicts_with",
+        "verified_by",
+        "affected_paths"
+      ],
+      "properties": {
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "上游依賴節點 ID (node_id) 或定位鍵 (node_key)"
+        },
+        "supersedes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "本節點取代之舊版節點 ID"
+        },
+        "conflicts_with": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "互斥或衝突之節點 ID"
+        },
+        "verified_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "負責驗證本節點之測試腳本或驗證器路徑"
+        },
+        "affected_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "本節點約束或影響之專案相對路徑清單"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

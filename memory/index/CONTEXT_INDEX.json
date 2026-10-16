@@ -1,0 +1,392 @@
+{
+  "schema_version": "2.0.0",
+  "project": "PotoTypeV0",
+  "harness": "Friday",
+  "generated_at": "2026-10-18T13:39:48Z",
+  "total_nodes": 7,
+  "domain_registry": {
+    "000": {
+      "title": "000 核心憲法與認知規範 (Core Constitution & Epistemic Rules)",
+      "count": 1,
+      "items": [
+        {
+          "node_id": "MEM-2026-0001",
+          "artifact_type": "constitution",
+          "status": "verified",
+          "access_tier": "immutable",
+          "priority": "critical",
+          "domain_code": "000",
+          "node_key": "000.SOUL.v1",
+          "facet_tags": [
+            "Friday:Governance:Meta:Constitution",
+            "PotoTypeV0:Memory:Schema:Soul"
+          ],
+          "keywords": [
+            "Meta-Constitution",
+            "Anti-Sycophancy Protocol",
+            "Epistemic Tags"
+          ],
+          "summary_1line": "Friday Agentic Harness 核心憲法：定義四級認知誠實標籤、跨模型對抗審查與獨立驗證斷言 (Oracle) 鐵律。",
+          "path": "memory/codex/000_SOUL.md",
+          "sha256_16": "961c54f997796e4f",
+          "author_model": "deepseek-ai/deepseek-v4.1-flash",
+          "reviewer_model": "z-ai/glm-5.3",
+          "depends_on": [],
+          "affected_paths": [
+            "schemas/artifact_header.schema.json",
+            "schemas/context_node.schema.json",
+            "schemas/schema_validator.py"
+          ]
+        }
+      ]
+    },
+    "100": {
+      "title": "100 安全邊界與工作區護欄 (Workspace Boundary & Security Guard)",
+      "count": 1,
+      "items": [
+        {
+          "node_id": "MEM-2026-0002",
+          "artifact_type": "rule",
+          "status": "verified",
+          "access_tier": "restricted",
+          "priority": "critical",
+          "domain_code": "100",
+          "node_key": "100.ARCH-RULES.v1",
+          "facet_tags": [
+            "Friday:Security:Hook:BoundaryGuard",
+            "PotoTypeV0:Architecture:Rules:Sandbox"
+          ],
+          "keywords": [
+            "Workspace Boundary Guard",
+            "SEC-BRAIN",
+            "SEC-CRED"
+          ],
+          "summary_1line": "定義 Friday Harness 之工作區邊界護欄：鎖定 ctx.cwd、保護 .Friday 大腦核心 (SEC-BRAIN)、隔離金鑰 (SEC-CRED) 與攔截危險指令。",
+          "path": "memory/codex/100_ARCH_RULES.md",
+          "sha256_16": "4c2c5e3a5785d7cd",
+          "author_model": "deepseek-ai/deepseek-v4.1-flash",
+          "reviewer_model": "z-ai/glm-5.3",
+          "depends_on": [
+            "MEM-2026-0001"
+          ],
+          "affected_paths": [
+            "schemas/schema_validator.py",
+            "scripts/auto_update_map.py"
+          ]
+        }
+      ]
+    },
+    "200": {
+      "title": "200 架構決策與跨模型審查 (Architecture Decisions & Cross-Review)",
+      "count": 2,
+      "items": [
+        {
+          "node_id": "MEM-2026-0003",
+          "artifact_type": "adr",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "high",
+          "domain_code": "200",
+          "node_key": "200.ADR-001.v1",
+          "facet_tags": [
+            "Friday:Orchestration:Router:VirtualModel",
+            "Friday:Orchestration:Teamwork:Subagents"
+          ],
+          "keywords": [
+            "Virtual Model Router",
+            "Multi-Agent Teamwork",
+            "NVIDIA NIM Pool"
+          ],
+          "summary_1line": "ADR-001：採用 Pi v1.3.0 registerVirtualModel 實作 pi-router/auto 動態路由，並配置 5 角色跨模型子代理協作團隊。",
+          "path": "memory/codex/200_DECISIONS.md",
+          "sha256_16": "9b38bbab8f3530eb",
+          "author_model": "deepseek-ai/deepseek-v4.1-flash",
+          "reviewer_model": "z-ai/glm-5.3",
+          "depends_on": [
+            "MEM-2026-0001",
+            "MEM-2026-0002"
+          ],
+          "affected_paths": [
+            "schemas/schema_validator.py"
+          ]
+        },
+        {
+          "node_id": "MEM-2026-0007",
+          "artifact_type": "spec",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "critical",
+          "domain_code": "200",
+          "node_key": "200.OPT-ROADMAP.v1",
+          "facet_tags": [
+            "PotoTypeV0:Evolution:Roadmap:Spec",
+            "Friday:Optimization:SixStages:Spec"
+          ],
+          "keywords": [
+            "OPTIMIZATION_ROADMAP",
+            "Stage 1",
+            "Stage 6",
+            "SEC-PORTABILITY",
+            "AS-05",
+            "AS-06",
+            "dream",
+            "LEDGER"
+          ],
+          "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
+          "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md",
+          "sha256_16": "acf4101a88e78d5b",
+          "author_model": "deepseek-ai/deepseek-v4.1-flash",
+          "reviewer_model": "z-ai/glm-5.3",
+          "depends_on": [
+            "000.SOUL.v1",
+            "100.ARCH-RULES.v1",
+            "200.ADR-001.v1",
+            "700.HARNESS-BLUEPRINT.v1",
+            "500.MODEL-APIKEY-SPEC.v1"
+          ],
+          "affected_paths": [
+            ".Friday/models.json",
+            ".Friday/settings.json",
+            ".Friday/AGENTS.md",
+            ".Friday/extensions/model-router.ts",
+            ".Friday/extensions/workspace-guard.ts",
+            ".Friday/extensions/epistemic-gate.ts",
+            "AGENTS.md",
+            "schemas/schema_validator.py",
+            "scripts/auto_update_map.py"
+          ]
+        }
+      ]
+    },
+    "300": {
+      "title": "300 核心領域邏輯與模組 (Core Domain Modules)",
+      "count": 0,
+      "items": []
+    },
+    "400": {
+      "title": "400 工具鏈、Hooks 與擴充套件 (Tools, Hooks & Extensions)",
+      "count": 0,
+      "items": []
+    },
+    "500": {
+      "title": "500 動態模型路由與子代理編排 (Model Routing & Subagents)",
+      "count": 1,
+      "items": [
+        {
+          "node_id": "MEM-2026-0006",
+          "artifact_type": "spec",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "high",
+          "domain_code": "500",
+          "node_key": "500.MODEL-APIKEY-SPEC.v1",
+          "facet_tags": [
+            "Friday:Routing:ModelPool:Spec",
+            "Friday:Security:ApiKeyConfig:Spec"
+          ],
+          "keywords": [
+            "models.json",
+            "auth.json",
+            "API Key",
+            "model-router",
+            "provider"
+          ],
+          "summary_1line": "Friday 模型分配之 4 大設定位置（models.json、settings.json、model-router.ts、agents/*.md）與多組 API Key 分流配置規格。",
+          "path": "memory/specs/500_MODEL_APIKEY_GUIDE.md",
+          "sha256_16": "4171e67f474316f1",
+          "author_model": "deepseek-ai/deepseek-v4.1-flash",
+          "reviewer_model": "z-ai/glm-5.3",
+          "depends_on": [
+            "100.ARCH-RULES.v1",
+            "200.ADR-001.v1"
+          ],
+          "affected_paths": [
+            ".Friday/models.json",
+            ".Friday/settings.json",
+            ".Friday/extensions/model-router.ts",
+            ".Friday/agents/scout.md",
+            ".Friday/agents/architect.md",
+            ".Friday/agents/challenger.md",
+            ".Friday/agents/worker.md",
+            ".Friday/agents/auditor.md"
+          ]
+        }
+      ]
+    },
+    "600": {
+      "title": "600 驗證斷言、測試與安全稽核 (Verification Oracles & Audits)",
+      "count": 1,
+      "items": [
+        {
+          "node_id": "MEM-2026-0004",
+          "artifact_type": "audit",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "normal",
+          "domain_code": "600",
+          "node_key": "600.AUDIT-001.v1",
+          "facet_tags": [
+            "PotoTypeV0:Verification:Audit:InitReport"
+          ],
+          "keywords": [
+            "Initialization Audit",
+            "Topology Verification"
+          ],
+          "summary_1line": "PotoTypeV0 專案與 Friday Agentic Harness 初始化驗收紀錄：記錄四大核心模組之驗收基準與依賴拓撲。",
+          "path": "memory/audits/MEM-2026-0004_HARNESS_INIT_AUDIT.md",
+          "sha256_16": "0345a4654029a58c",
+          "author_model": "poolside/laguna-xs-2.1",
+          "reviewer_model": "z-ai/glm-5.3-flash",
+          "depends_on": [
+            "MEM-2026-0001",
+            "MEM-2026-0002",
+            "MEM-2026-0003"
+          ],
+          "affected_paths": [
+            "schemas/artifact_header.schema.json",
+            "schemas/context_node.schema.json",
+            "schemas/schema_validator.py",
+            "scripts/auto_update_map.py"
+          ]
+        }
+      ]
+    },
+    "700": {
+      "title": "700 可攜式部署與容器封裝 (Portable Brain & Containerization)",
+      "count": 1,
+      "items": [
+        {
+          "node_id": "MEM-2026-0005",
+          "artifact_type": "spec",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "high",
+          "domain_code": "700",
+          "node_key": "700.HARNESS-BLUEPRINT.v1",
+          "facet_tags": [
+            "Friday:Harness:PortableBrain:Spec",
+            "PotoTypeV0:Architecture:Blueprint:Spec"
+          ],
+          "keywords": [
+            "PI_CODING_AGENT_DIR",
+            "雙層可攜式架構",
+            "workspace-guard",
+            "model-router",
+            "epistemic-gate",
+            "Zero-Drift"
+          ],
+          "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
+          "path": "memory/specs/700_HARNESS_BLUEPRINT.md",
+          "sha256_16": "39b1c8e9924d8cd6",
+          "author_model": "deepseek-ai/deepseek-v4.1-flash",
+          "reviewer_model": "z-ai/glm-5.3",
+          "depends_on": [
+            "000.SOUL.v1",
+            "100.ARCH-RULES.v1",
+            "200.ADR-001.v1"
+          ],
+          "affected_paths": [
+            ".Friday/extensions/workspace-guard.ts",
+            ".Friday/extensions/model-router.ts",
+            ".Friday/extensions/epistemic-gate.ts",
+            ".Friday/extensions/subagent/index.ts",
+            "schemas/schema_validator.py",
+            "scripts/auto_update_map.py"
+          ]
+        }
+      ]
+    },
+    "800": {
+      "title": "800 外部規格與參考文獻 (External Specs & References)",
+      "count": 0,
+      "items": []
+    },
+    "900": {
+      "title": "900 歷史封存節點 (Archived & Superseded Nodes)",
+      "count": 0,
+      "items": []
+    }
+  },
+  "causal_topology_edges": [
+    {
+      "from": "MEM-2026-0004",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0004",
+      "to": "MEM-2026-0002",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0004",
+      "to": "MEM-2026-0003",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0002",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0003",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0003",
+      "to": "MEM-2026-0002",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0007",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0007",
+      "to": "MEM-2026-0002",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0007",
+      "to": "MEM-2026-0003",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0007",
+      "to": "MEM-2026-0005",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0007",
+      "to": "MEM-2026-0006",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0006",
+      "to": "MEM-2026-0002",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0006",
+      "to": "MEM-2026-0003",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0005",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0005",
+      "to": "MEM-2026-0002",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0005",
+      "to": "MEM-2026-0003",
+      "relation": "depends_on"
+    }
+  ]
+}

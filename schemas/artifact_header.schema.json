@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://friday.pi-agent.local/schemas/artifact_header.schema.json",
+  "title": "Friday Agentic Harness Artifact Governance Header Schema",
+  "description": "Agentic Harness 記憶節點與架構產出物治理標頭：定義節點 ID、產出類型、存取層級、驗證狀態、跨模型對抗審查與獨立驗證斷言 (Verification Oracle)。",
+  "type": "object",
+  "required": [
+    "node_id",
+    "artifact_type",
+    "access_tier",
+    "priority",
+    "status",
+    "created_at",
+    "updated_at",
+    "author",
+    "reviewer",
+    "epistemic_profile",
+    "verification_oracle"
+  ],
+  "properties": {
+    "node_id": {
+      "type": "string",
+      "pattern": "^MEM-[0-9]{4}-[0-9]{4}$",
+      "description": "唯一記憶節點 ID (例如: MEM-2026-0001)"
+    },
+    "artifact_type": {
+      "type": "string",
+      "enum": [
+        "constitution",
+        "rule",
+        "adr",
+        "spec",
+        "audit"
+      ],
+      "description": "節點類型：constitution(核心憲法)、rule(架構與安全規則)、adr(架構決策紀錄)、spec(功能與設計規格)、audit(驗證與審查報告)"
+    },
+    "access_tier": {
+      "type": "string",
+      "enum": [
+        "standard",
+        "restricted",
+        "immutable"
+      ],
+      "description": "存取保護層級：standard(一般記憶節點)、restricted(受保護之邊界與路由規則)、immutable(不可變核心憲法)"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "high",
+        "critical"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "reviewing",
+        "verified",
+        "archived",
+        "deprecated"
+      ],
+      "description": "生命週期狀態：進入 verified 或 archived 前，author.model 與 reviewer.model 必須為不同模型，且通過 verification_oracle"
+    },
+    "created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "updated_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "author": {
+      "type": "object",
+      "required": [
+        "role",
+        "model"
+      ],
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        }
+      },
+      "description": "提案角色與產出模型"
+    },
+    "reviewer": {
+      "type": "object",
+      "required": [
+        "role",
+        "model",
+        "verdict"
+      ],
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "APPROVED",
+            "CHALLENGED",
+            "REJECTED"
+          ]
+        }
+      },
+      "description": "跨模型對抗審查角色與模型 (Anti-Sycophancy: verified 狀態時不得與 author.model 相同)"
+    },
+    "epistemic_profile": {
+      "type": "object",
+      "required": [
+        "fact_count",
+        "inferred_count",
+        "hypothesis_count",
+        "unverified_count"
+      ],
+      "properties": {
+        "fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inferred_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hypothesis_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unverified_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "description": "內文認知標籤統計，由驗證器自動核對內文實際出現的 [FACT]/[INFERRED]/[HYPOTHESIS]/[UNVERIFIED] 標籤"
+    },
+    "verification_oracle": {
+      "type": "object",
+      "required": [
+        "type",
+        "command",
+        "expected_exit_code",
+        "falsifiable_criterion"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "schema_check",
+            "pytest",
+            "bash_assert",
+            "ast_check"
+          ]
+        },
+        "command": {
+          "type": "string",
+          "minLength": 3
+        },
+        "expected_exit_code": {
+          "type": "integer"
+        },
+        "falsifiable_criterion": {
+          "type": "string",
+          "minLength": 10,
+          "description": "可證偽條件：明確定義什麼情況下本節點斷言失效或驗證失敗"
+        }
+      },
+      "description": "獨立外部驗證斷言 (Verification Oracle)，防止單一 LLM 自寫自審"
+    }
+  }
+}
