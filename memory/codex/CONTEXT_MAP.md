@@ -1,6 +1,6 @@
 # 🗺️ PotoTypeV0 × Friday Context Registry & Topology Map (CONTEXT_MAP.md)
 
-> **自動生成時間**: `2026-10-18T14:19:55Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `7`
+> **自動生成時間**: `2026-10-18T14:48:12Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `8`
 > **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入本索引之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。
 
 ## 1. 領域分層索引表 (Domain Layer Registry 000–900)
@@ -24,6 +24,12 @@
 | `200.ADR-001.v1` | `MEM-2026-0003` | `adr` | `verified` | `deepseek-ai/deepseek-v4.1-flash` ➔ `z-ai/glm-5.3` | ADR-001：採用 Pi v1.3.0 registerVirtualModel 實作 pi-router/auto 動態路由，並配置 5 角色跨模型子代理協作團隊。 | [200_DECISIONS.md](200_DECISIONS.md) |
 | `200.OPT-ROADMAP.v1` | `MEM-2026-0007` | `spec` | `verified` | `deepseek-ai/deepseek-v4.1-flash` ➔ `z-ai/glm-5.3` | PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。 | [200_OPTIMIZATION_ROADMAP.md](../specs/200_OPTIMIZATION_ROADMAP.md) |
 
+### 🧩 `300` — 300 核心領域邏輯與模組 (Core Domain Modules)
+
+| 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
+| :--- | :--- | :---: | :---: | :--- | :--- | :--- |
+| `300.LEDGER.v1` | `MEM-2026-0008` | `spec` | `verified` | `nvidia/nemotron-3-super-120b-a12b` ➔ `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | 專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。 | [LEDGER.md](../LEDGER.md) |
+
 ### 🧩 `500` — 500 動態模型路由與子代理編排 (Model Routing & Subagents)
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
@@ -46,6 +52,8 @@
 
 ```mermaid
 flowchart TD
+    MEM_2026_0008["MEM-2026-0008"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
+    MEM_2026_0008["MEM-2026-0008"] -->|"depends_on"| MEM_2026_0007["MEM-2026-0007"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0003["MEM-2026-0003"]

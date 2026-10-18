@@ -54,12 +54,12 @@ topology:
 2. `[FACT]` Pi v1.3.0 原生提供 `pi.registerVirtualModel()` 接口，允許在每次 LLM 請求發送前動態決定目標實體模型 (`route(request, ctx)`)，並將路由狀態寫入 Session 分支樹。
 3. `[INFERRED]` 將上述 9 款故障模型自 `.Friday/models.json` 徹底剔除，並以 `pi-router/auto` 作為 Friday 大腦預設模型，可兼顧零成本、高速度與跨模型專長互補。
 
-## 二、 5 角色子代理分工矩陣 (Dialectical Teamwork Matrix)
+## 二、 5 角色子代理與專長派工矩陣 (Dialectical Teamwork Matrix)
 
-1. `[FACT]` Friday 大腦在 `.Friday/agents/` 目錄下配置 5 名專業子代理：
-   - **`scout` (`nvidia/nemotron-3.5-lightning-30b-a3b`)**：高速唯讀探索與檔案檢索。
-   - **`architect` (`deepseek-ai/deepseek-v4.1-flash`)**：1M Context 架構設計、規格擬定與視覺分析。
-   - **`challenger` (`z-ai/glm-5.3`)**：跨模型對抗審查員，專門找尋 `architect` 與 `worker` 的邏輯漏洞與自我迎合盲點。
-   - **`worker` (`poolside/laguna-xs-2.1`)**：專精程式碼實作與重構。
-   - **`auditor` (`z-ai/glm-5.3-flash`)**：執行 `schema_validator.py` 與測試套件之獨立稽核員。
-2. `[INFERRED]` 透過「DeepSeek 設計 ➔ GLM-5.3 找碴審查 ➔ Laguna 實作 ➔ GLM-5.3-Flash 執行外部驗證腳本」的流水線，能從架構層面根除單一模型的諂媚與幻覺問題。
+1. `[FACT]` Friday 大腦預設由固定主腦 `nvidia/nemotron-3-super-120b-a12b` (`0.28s TTFT`) 負責全局推理與維持 KV Cache，並在 `.Friday/agents/` 與 `dispatch_specialist` 工具中配置 5 名 `< 1s TTFT` 專業子代理：
+   - **`scout` (`z-ai/glm-5.3-flash`)**：1M Context、`0.60s TTFT` 高速唯讀探索與檔案檢索。
+   - **`architect` (`nvidia/nemotron-3-super-120b-a12b`)**：120B 旗艦推理、`0.28s TTFT` 架構設計與規格擬定。
+   - **`challenger` (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`)**：`0.39s TTFT` 跨模型異體對抗審查員，專門找尋 `architect` 與 `worker` 的邏輯漏洞與自我迎合盲點。
+   - **`worker` (`poolside/laguna-xs-2.1`)**：`0.28s TTFT` 專精程式碼實作與重構。
+   - **`auditor` (`z-ai/glm-5.3-flash`)**：`0.60s TTFT` 執行 `schema_validator.py` 與測試套件之獨立稽核員。
+2. `[INFERRED]` 透過「Nemotron-120B 設計 ➔ Nemotron-Nano-30B/GLM 異體找碴審查 ➔ Laguna 實作 ➔ GLM-5.3-Flash 執行外部驗證腳本」的流水線，能從架構層面根除單一模型的諂媚與幻覺問題。

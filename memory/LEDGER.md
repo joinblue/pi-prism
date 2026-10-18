@@ -1,0 +1,67 @@
+---
+node_id: "MEM-2026-0008"
+artifact_type: "spec"
+access_tier: "standard"
+priority: "high"
+status: "verified"
+created_at: "2026-10-18"
+updated_at: "2026-10-18"
+author:
+  role: "architect"
+  model: "nvidia/nemotron-3-super-120b-a12b"
+reviewer:
+  role: "challenger"
+  model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
+  verdict: "APPROVED"
+epistemic_profile:
+  fact_count: 2
+  inferred_count: 1
+  hypothesis_count: 0
+  unverified_count: 0
+verification_oracle:
+  type: "schema_check"
+  command: "python3 schemas/schema_validator.py --file memory/LEDGER.md"
+  expected_exit_code: 0
+  falsifiable_criterion: "若 memory/LEDGER.md 總行數超過 80 行或未通過 Schema 驗證，則本活躍台帳節點判定無效。"
+context_index:
+  domain_code: "300"
+  node_key: "300.LEDGER.v1"
+  facet_tags:
+    - "PotoTypeV0:Workflow:Ledger:ActiveTasks"
+    - "Friday:Governance:Memory:Ledger"
+  keywords:
+    - "LEDGER"
+    - "Active Tasks"
+    - "Work Orders"
+    - "Stage Tracking"
+  summary_1line: "專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。"
+topology:
+  depends_on:
+    - "000.SOUL.v1"
+    - "200.OPT-ROADMAP.v1"
+  supersedes: []
+  conflicts_with: []
+  verified_by:
+    - "schemas/schema_validator.py"
+  affected_paths:
+    - "memory/specs/200_OPTIMIZATION_ROADMAP.md"
+---
+
+# 📋 `300.LEDGER.v1` (MEM-2026-0008) — 專案唯一活躍工單台帳
+
+## 一、 台帳治理守則 (Ledger Governance Rules)
+
+1. `[FACT]` 本檔案為專案唯一活躍狀態台帳（Single Source of Active Work），嚴格限制檔案總行數 $\le 80$ 行。
+2. `[FACT]` 所有已完成之歷史決策與里程碑透過 `/dream` 提純歸檔至 [`memory/codex/200_DECISIONS.md`](codex/200_DECISIONS.md) 或 [`memory/audits/`](audits/MEM-2026-0004_HARNESS_INIT_AUDIT.md)。
+3. `[INFERRED]` 透過「只留活躍工單、完工即歸檔」的精簡機制，可確保 Agent 每次調閱台帳時皆維持極高信噪比，絕不耗損 Context 額度。
+
+## 二、 活躍工單與演進進度表 (Active Work Orders)
+
+| 工單 ID | 階段 / 任務名稱 | 狀態 | 負責角色 | 驗收基準 (Oracle) |
+| :--- | :--- | :---: | :---: | :--- |
+| **WO-2026-S1** | Stage 1：`<1s TTFT` 固定主腦 + `dispatch_specialist` | ✅ 已完成 (`fadbd17`) | `architect` / `worker` | `test_friday_architecture.py` (Suite 3 & 4) |
+| **WO-2026-S2** | Stage 2：繁中強制、三段式通報、`LEDGER.md` 與技能書 | ✅ 已完成 | `architect` / `worker` | `schema_validator.py` + `test_friday_architecture.py` (Suite 6) |
+| **WO-2026-S3** | Stage 3：`workspace-guard.ts` 引號感知、`SEC-PORTABILITY` 與處方籤 | ⏳ 待執行 | `worker` / `challenger` | Stage 3 Guard Unit & E2E Tests |
+| **WO-2026-S4** | Stage 4：`schema_validator.py` 散文預算、`AS-05`/`AS-06` 與骨架 | ⏳ 待執行 | `worker` / `auditor` | Stage 4 Validator Oracle Tests |
+| **WO-2026-S5** | Stage 5：`auto_update_map.py` 死鏈/AST + `epistemic-gate.ts` 警報 | ⏳ 待執行 | `worker` / `auditor` | Stage 5 Hook & Compiler Tests |
+| **WO-2026-S6** | Stage 6：`/dream` 三階段睡眠記憶鞏固 + 退出微夢境 | ⏳ 待執行 | `architect` / `auditor` | Stage 6 Dream Pipeline E2E Tests |

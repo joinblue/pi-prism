@@ -2,8 +2,8 @@
   "schema_version": "2.0.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-18T14:19:55Z",
-  "total_nodes": 7,
+  "generated_at": "2026-10-18T14:48:12Z",
+  "total_nodes": 8,
   "domain_registry": {
     "000": {
       "title": "000 核心憲法與認知規範 (Core Constitution & Epistemic Rules)",
@@ -99,7 +99,7 @@
           ],
           "summary_1line": "ADR-001：採用 Pi v1.3.0 registerVirtualModel 實作 pi-router/auto 動態路由，並配置 5 角色跨模型子代理協作團隊。",
           "path": "memory/codex/200_DECISIONS.md",
-          "sha256_16": "9b38bbab8f3530eb",
+          "sha256_16": "f053f059e86bf319",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -160,8 +160,40 @@
     },
     "300": {
       "title": "300 核心領域邏輯與模組 (Core Domain Modules)",
-      "count": 0,
-      "items": []
+      "count": 1,
+      "items": [
+        {
+          "node_id": "MEM-2026-0008",
+          "artifact_type": "spec",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "high",
+          "domain_code": "300",
+          "node_key": "300.LEDGER.v1",
+          "facet_tags": [
+            "PotoTypeV0:Workflow:Ledger:ActiveTasks",
+            "Friday:Governance:Memory:Ledger"
+          ],
+          "keywords": [
+            "LEDGER",
+            "Active Tasks",
+            "Work Orders",
+            "Stage Tracking"
+          ],
+          "summary_1line": "專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。",
+          "path": "memory/LEDGER.md",
+          "sha256_16": "9852582138902f74",
+          "author_model": "nvidia/nemotron-3-super-120b-a12b",
+          "reviewer_model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+          "depends_on": [
+            "000.SOUL.v1",
+            "200.OPT-ROADMAP.v1"
+          ],
+          "affected_paths": [
+            "memory/specs/200_OPTIMIZATION_ROADMAP.md"
+          ]
+        }
+      ]
     },
     "400": {
       "title": "400 工具鏈、Hooks 與擴充套件 (Tools, Hooks & Extensions)",
@@ -308,6 +340,16 @@
     }
   },
   "causal_topology_edges": [
+    {
+      "from": "MEM-2026-0008",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0008",
+      "to": "MEM-2026-0007",
+      "relation": "depends_on"
+    },
     {
       "from": "MEM-2026-0004",
       "to": "MEM-2026-0001",

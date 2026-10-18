@@ -277,8 +277,39 @@ def test_5_multi_agent_profiles() -> None:
         assert agent_file.exists(), f"Missing agent profile: {agent_file}"
         text = agent_file.read_text(encoding="utf-8")
         assert f"model: {expected_model}" in text, f"Agent {name} model mismatch"
-        print(f"  🤖 Agent [{name:10s}] -> {expected_model} (Ready)")
+        assert "繁體中文" in text, f"Agent {name} missing Traditional Chinese mandate"
+        assert "結論" in text and "邊界與異常" in text and "下一步行動" in text, (
+            f"Agent {name} missing 3-part High-SNR reporting protocol"
+        )
+        print(f"  🤖 Agent [{name:10s}] -> {expected_model} (zh-TW & 3-Part Protocol Ready)")
     print("✅ [TEST 5 PASSED] Stage 1 極速模型池與 5 大跨模型子代理角色全數就緒！")
+
+
+def test_6_stage2_governance_and_ledger() -> None:
+    print("\n" + "=" * 72)
+    print("🧪 [TEST 6] Stage 2: 繁體中文強制規範、bash 前置說明、三段式通報、LEDGER.md (<=80行) 與通用技能書查核")
+    print("=" * 72)
+    for doc_path in [FRIDAY_BRAIN / "AGENTS.md", PROJECT_ROOT / "AGENTS.md"]:
+        content = doc_path.read_text(encoding="utf-8")
+        assert "繁體中文" in content, f"{doc_path} missing Traditional Chinese mandate"
+        assert "bash" in content and "目的" in content, f"{doc_path} missing bash pre-execution explanation clause"
+        assert "結論" in content and "邊界與異常" in content and "下一步行動" in content, (
+            f"{doc_path} missing 3-part High-SNR reporting protocol"
+        )
+        assert "豁免" in content, f"{doc_path} missing data/table line-limit exemption clause"
+        print(f"  📜 Constitution [{doc_path.relative_to(PROJECT_ROOT)}] -> 繁中鐵律 + bash 前置說明 + 三段式通報驗證通過")
+
+    ledger_path = PROJECT_ROOT / "memory" / "LEDGER.md"
+    assert ledger_path.exists(), "Missing memory/LEDGER.md"
+    ledger_lines = ledger_path.read_text(encoding="utf-8").splitlines()
+    assert len(ledger_lines) <= 80, f"memory/LEDGER.md must be <= 80 lines, got {len(ledger_lines)}"
+    print(f"  📋 Active Ledger [memory/LEDGER.md] -> 總行數 {len(ledger_lines)}/80 行 (符合 <=80 行上限)")
+
+    for skill_name in ["root-cause-debugging", "safe-refactoring"]:
+        skill_file = FRIDAY_BRAIN / "skills" / skill_name / "SKILL.md"
+        assert skill_file.exists(), f"Missing skill file: {skill_file}"
+        print(f"  🛠️ Skill [.Friday/skills/{skill_name}/SKILL.md] -> Ready")
+    print("✅ [TEST 6 PASSED] Stage 2 繁體中文強制規範、三段式通報、唯一活躍台帳 LEDGER.md 與通用技能書驗證通過！")
 
 
 def main() -> int:
@@ -287,8 +318,9 @@ def main() -> int:
     test_3_workspace_boundary_guard()
     test_4_virtual_router_and_progressive_disclosure()
     test_5_multi_agent_profiles()
+    test_6_stage2_governance_and_ledger()
     print("\n" + "🎉" * 24)
-    print("ALL 5 ARCHITECTURE VERIFICATION SUITES PASSED 100%!")
+    print("ALL 6 ARCHITECTURE VERIFICATION SUITES PASSED 100%!")
     print("🎉" * 24)
     return 0
 
