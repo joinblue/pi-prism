@@ -191,9 +191,13 @@ def test_3_workspace_boundary_guard() -> None:
 
 def test_4_virtual_router_and_progressive_disclosure() -> None:
     print("\n" + "=" * 72)
-    print("🧪 [TEST 4] Pillar 3A: pi-router/auto 動態虛擬路由 + CONTEXT_INDEX 漸進式揭露實測")
+    print("🧪 [TEST 4] Pillar 3A: 固定主腦 (Orchestrator-First) 路由 + dispatch_specialist 專家派工 + 漸進式揭露實測")
     print("=" * 72)
-    prompt = "快篩搜尋：請根據系統自動注入的 CONTEXT_INDEX 記憶節點單行索引，直接回答節點 MEM-2026-0001 的定位鍵 (node_key) 是什麼？請勿呼叫任何工具，一行回答即可。"
+    prompt = (
+        "請呼叫 `dispatch_specialist` 工具，指定 `specialist='challenger'`，"
+        "`task='請用一句話回答你的角色以及根據 CONTEXT_INDEX 中 MEM-2026-0001 的定位鍵 (node_key) 000.SOUL.v1 是否存在？'`。"
+        "收到工具結果後，請直接輸出 `000.SOUL.v1` 與 Challenger 的審查結論。"
+    )
     proc = subprocess.run(
         [
             "pi",
@@ -202,7 +206,7 @@ def test_4_virtual_router_and_progressive_disclosure() -> None:
             "-p",
             "--no-session",
             "--thinking",
-            "off",
+            "low",
             "--model",
             "pi-router/auto",
             prompt,
@@ -211,11 +215,12 @@ def test_4_virtual_router_and_progressive_disclosure() -> None:
         env=build_env(),
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=90,
     )
     assert proc.returncode == 0, f"pi-router/auto failed: {proc.stderr}"
 
     routed_model = None
+    specialist_called = False
     assistant_reply = ""
     for line in proc.stdout.splitlines():
         if not line.strip():
@@ -231,22 +236,39 @@ def test_4_virtual_router_and_progressive_disclosure() -> None:
                 for b in msg.get("content", []):
                     if isinstance(b, dict) and b.get("type") == "text":
                         assistant_reply += b.get("text", "")
+            elif msg.get("role") == "toolResult" and msg.get("toolName") == "dispatch_specialist":
+                specialist_called = True
+                text_blocks = [b.get("text", "") for b in msg.get("content", []) if isinstance(b, dict)]
+                print(f"  ⚡ dispatch_specialist 零冷啟動回傳: {text_blocks[0].splitlines()[0] if text_blocks else ''}")
 
-    print(f"  🧠 pi-router/auto 動態路由目標模型: {routed_model}")
-    print(f"  💬 Friday 回應: {assistant_reply.strip()}")
-    assert routed_model is not None, "Expected pi-router/auto to route to a real NVIDIA model"
+    print(f"  🧠 pi-router/auto 固定主腦目標模型: {routed_model}")
+    print(f"  💬 Friday 主腦綜合回應: {assistant_reply.strip()[:200]}")
+    assert routed_model == "nvidia/nemotron-3-super-120b-a12b", (
+        f"Expected Fixed Main Orchestrator 'nvidia/nemotron-3-super-120b-a12b', got '{routed_model}'"
+    )
+    assert specialist_called, "Expected Orchestrator to invoke dispatch_specialist tool!"
     assert "000.SOUL.v1" in assistant_reply, f"Expected Friday to know 000.SOUL.v1 from Progressive Disclosure! Got: {assistant_reply}"
-    print("✅ [TEST 4 PASSED] pi-router/auto 動態路由與 CONTEXT_INDEX 漸進式揭露運作正常！")
+    print("✅ [TEST 4 PASSED] 固定主腦 (nemotron-3-super-120b-a12b)、零冷啟動 dispatch_specialist 與漸進式揭露運作正常！")
 
 
 def test_5_multi_agent_profiles() -> None:
     print("\n" + "=" * 72)
-    print("🧪 [TEST 5] Pillar 3B: 5 角色跨模型子代理設定檔與獨立驗證查核")
+    print("🧪 [TEST 5] Pillar 3B: Stage 1 極速模型池 (<1s TTFT)、NVCF-POLL-SECONDS=30 與 5 角色子代理查核")
     print("=" * 72)
+    models_cfg = json.loads((FRIDAY_BRAIN / "models.json").read_text(encoding="utf-8"))
+    for m in models_cfg["providers"]["nvidia"]["models"]:
+        poll_sec = m.get("headers", {}).get("NVCF-POLL-SECONDS")
+        assert poll_sec == "30", f"Model {m['id']} NVCF-POLL-SECONDS should be '30', got {poll_sec}"
+    print("  ⚡ models.json: 全數 12 款模型 NVCF-POLL-SECONDS 已鎖定為 '30'")
+
+    settings_cfg = json.loads((FRIDAY_BRAIN / "settings.json").read_text(encoding="utf-8"))
+    assert settings_cfg.get("defaultThinkingLevel") == "low", "settings.json defaultThinkingLevel must be 'low'"
+    print("  ⚡ settings.json: defaultThinkingLevel 已鎖定為 'low'")
+
     expected_agents = {
-        "scout": "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "architect": "nvidia/deepseek-ai/deepseek-v4.1-flash",
-        "challenger": "nvidia/z-ai/glm-5.3",
+        "scout": "nvidia/z-ai/glm-5.3-flash",
+        "architect": "nvidia/nvidia/nemotron-3-super-120b-a12b",
+        "challenger": "nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
         "worker": "nvidia/poolside/laguna-xs-2.1",
         "auditor": "nvidia/z-ai/glm-5.3-flash",
     }
@@ -256,7 +278,7 @@ def test_5_multi_agent_profiles() -> None:
         text = agent_file.read_text(encoding="utf-8")
         assert f"model: {expected_model}" in text, f"Agent {name} model mismatch"
         print(f"  🤖 Agent [{name:10s}] -> {expected_model} (Ready)")
-    print("✅ [TEST 5 PASSED] 5 大跨模型子代理角色全數就緒！")
+    print("✅ [TEST 5 PASSED] Stage 1 極速模型池與 5 大跨模型子代理角色全數就緒！")
 
 
 def main() -> int:

@@ -12,7 +12,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [
@@ -63,7 +63,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [
@@ -105,7 +105,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": false,
           "input": [
@@ -147,7 +147,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [
@@ -189,7 +189,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [
@@ -231,7 +231,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [
@@ -262,7 +262,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [
@@ -293,7 +293,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [
@@ -324,7 +324,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [
@@ -355,7 +355,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [
@@ -386,7 +386,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [
@@ -417,7 +417,7 @@
           "provider": "nvidia",
           "baseUrl": "https://integrate.api.nvidia.com/v1",
           "headers": {
-            "NVCF-POLL-SECONDS": "3600"
+            "NVCF-POLL-SECONDS": "30"
           },
           "reasoning": true,
           "input": [

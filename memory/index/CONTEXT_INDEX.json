@@ -2,7 +2,7 @@
   "schema_version": "2.0.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-18T13:39:48Z",
+  "generated_at": "2026-10-18T14:19:55Z",
   "total_nodes": 7,
   "domain_registry": {
     "000": {
@@ -193,7 +193,7 @@
           ],
           "summary_1line": "Friday 模型分配之 4 大設定位置（models.json、settings.json、model-router.ts、agents/*.md）與多組 API Key 分流配置規格。",
           "path": "memory/specs/500_MODEL_APIKEY_GUIDE.md",
-          "sha256_16": "4171e67f474316f1",
+          "sha256_16": "05d7a09791efe707",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -277,7 +277,7 @@
           ],
           "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
           "path": "memory/specs/700_HARNESS_BLUEPRINT.md",
-          "sha256_16": "39b1c8e9924d8cd6",
+          "sha256_16": "d337f31549f04ee9",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [

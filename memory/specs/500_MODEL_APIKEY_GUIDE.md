@@ -71,17 +71,17 @@ flowchart LR
 ```
 
 1. `[FACT]` **可用模型池總表（[`.Friday/models.json`](../../.Friday/models.json)）**：定義供應商 (`providers`) 與可用模型 (`models`) 清單，包含 API 端點 (`baseUrl`)、上下文視窗 (`contextWindow`)、最大輸出 (`maxTokens`) 與相容參數 (`compat`)。
-2. `[FACT]` **大腦啟動預設模型（[`.Friday/settings.json`](../../.Friday/settings.json)）**：決定啟動 `pi` 時預設掛載的 `defaultProvider`（目前為 `"pi-router"`）與 `defaultModel`（目前為 `"auto"`），以及預設啟用的高速檢索工具（`+grep`, `+find`, `+ls`）。
-3. `[FACT]` **主對話路由分配（[`.Friday/extensions/model-router.ts`](../../.Friday/extensions/model-router.ts)）**：定義 `ROLE_MODELS` 映射表，控制各個模式（`scout`、`architect`、`code`、`audit`、`vision`）對應的目標模型。
-4. `[FACT]` **5 大子代理角色綁定（[`.Friday/agents/*.md`](../../.Friday/agents)）**：每個子代理檔案頂部的 YAML Frontmatter 透過 `model: <provider>/<model_id>` 指定專屬模型與工具權限：
+2. `[FACT]` **大腦啟動預設模型（[`.Friday/settings.json`](../../.Friday/settings.json)）**：決定啟動 `pi` 時預設掛載的 `defaultProvider`（`"pi-router"`）、`defaultModel`（`"auto"`）、預設思考層級 `defaultThinkingLevel`（`"low"`），以及預設啟用的高速檢索工具（`+grep`, `+find`, `+ls`）。
+3. `[FACT]` **固定主腦路由與專家即时派工（[`.Friday/extensions/model-router.ts`](../../.Friday/extensions/model-router.ts)）**：定義 `ROLE_MODELS` 極速模型映射表（預設主腦固定為 `nvidia/nemotron-3-super-120b-a12b`），並註冊零冷啟動之 `dispatch_specialist` 專家派工工具。
+4. `[FACT]` **5 大子代理角色綁定（[`.Friday/agents/*.md`](../../.Friday/agents)）**：每個子代理檔案頂部的 YAML Frontmatter 透過 `model: <provider>/<model_id>` 指定專屬 `<1s TTFT` 極速模型與工具權限：
 
 | 子代理角色檔 | 目前綁定模型 (`model:`) | 允許使用的工具 (`tools:`) |
 | :--- | :--- | :--- |
-| [`.Friday/agents/scout.md`](../../.Friday/agents/scout.md) | `nvidia/nemotron-3.5-lightning-30b-a3b` *(Stage 1 將升級為 `glm-5.3-flash`)* | `read, grep, find, ls` (唯讀) |
-| [`.Friday/agents/architect.md`](../../.Friday/agents/architect.md) | `nvidia/deepseek-ai/deepseek-v4.1-flash` *(Stage 1 將升級為 `nemotron-3-super-120b-a12b`)* | `read, grep, find, ls` (唯讀) |
-| [`.Friday/agents/challenger.md`](../../.Friday/agents/challenger.md) | `nvidia/z-ai/glm-5.3` *(Stage 1 將升級為 `nemotron-3-nano-omni-30b-a3b-reasoning`)* | `read, grep, find, ls` (唯讀) |
-| [`.Friday/agents/worker.md`](../../.Friday/agents/worker.md) | `nvidia/poolside/laguna-xs-2.1` | `read, edit, write, bash, grep, find, ls` |
-| [`.Friday/agents/auditor.md`](../../.Friday/agents/auditor.md) | `nvidia/z-ai/glm-5.3-flash` | `read, bash, grep, find, ls` |
+| [`.Friday/agents/scout.md`](../../.Friday/agents/scout.md) | `nvidia/z-ai/glm-5.3-flash` (`0.60s TTFT`, 1M Context) | `read, grep, find, ls` (唯讀) |
+| [`.Friday/agents/architect.md`](../../.Friday/agents/architect.md) | `nvidia/nvidia/nemotron-3-super-120b-a12b` (`0.28s TTFT`, 120B 旗艦推理) | `read, grep, find, ls` (唯讀) |
+| [`.Friday/agents/challenger.md`](../../.Friday/agents/challenger.md) | `nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (`0.39s TTFT`, 異體跨模型推理) | `read, grep, find, ls` (唯讀) |
+| [`.Friday/agents/worker.md`](../../.Friday/agents/worker.md) | `nvidia/poolside/laguna-xs-2.1` (`0.28s TTFT`, 程式碼專精) | `read, edit, write, bash, grep, find, ls` |
+| [`.Friday/agents/auditor.md`](../../.Friday/agents/auditor.md) | `nvidia/z-ai/glm-5.3-flash` (`0.60s TTFT`) | `read, bash, grep, find, ls` |
 
 ---
 
