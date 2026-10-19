@@ -62,19 +62,20 @@ flowchart TB
 
 ```text
 .
-├── AGENTS.md                        # L0 全域精簡憲法 (Always-Loaded Entrypoint, <60 lines)
 ├── README.md                        # P.R.I.S.M. 專案總覽與快速啟動指南
 ├── .Friday/                         # [Layer 1] 可攜式 Agent 執行期大腦 (PI_CODING_AGENT_DIR)
+│   ├── AGENTS.md                    # L0 全域精簡憲法 (Always-Loaded Entrypoint, <60 lines)
 │   ├── settings.json                # 啟用之 Extensions、Prompts、Skills 與預設模型配置
 │   ├── models.json                  # 多供應商/本地端模型註冊表 (不含任何明文 API Key)
 │   ├── agents/                      # 固定職責之專業 Subagents (scout, architect, challenger, worker, auditor)
 │   ├── extensions/                  # 三大核心 TypeScript Hooks
 │   │   ├── workspace-guard.ts       # 邊界、憑證、大腦保護與 Shell 語法感知攔截器
 │   │   ├── epistemic-gate.ts        # 漸進式記憶注入與認知誠實度檢查門閥
-│   │   └── model-router.ts          # 動態路由與子代理調度器 (pi-router/auto, /dream, /verify-memory)
+│   │   └── model-router.ts          # 動態路由、視覺自動分流與 /mode 角色/憑證管理中心
 │   ├── prompts/                     # 結構化驗證與記憶寫入 Prompt 模板
-│   └── skills/                      # 隨附技能包 (memory-librarian, dialectical-verifier)
+│   └── skills/                      # 隨附技能包 (root-cause-debugging, safe-refactoring 等)
 ├── memory/                          # [Layer 2] 100% 受 Schema 納管的零漂移記憶圖譜
+│   ├── LEDGER.md                    # 唯一活躍執行台帳 (<=80 lines)
 │   ├── codex/                       # 000~200: 靈魂憲法、全域鐵律、核心決策與 CONTEXT_MAP.md
 │   ├── specs/                       # 200~700: 六階段演進路線圖、模型指南與架構藍圖
 │   ├── audits/                      # 600: 跨模型獨立驗證與審計報告
@@ -83,7 +84,7 @@ flowchart TB
 │   └── schema_validator.py          # 外部決定性驗證器 (Schema + DAG + Anti-Sycophancy + Oracle)
 └── scripts/
     ├── auto_update_map.py           # DAG 拓撲檢查與 CONTEXT_MAP 自動編譯器
-    └── test_friday_architecture.py  # 五合一端到端架構自動化驗證套件
+    └── test_friday_architecture.py  # 端到端架構自動化驗證套件
 ```
 
 ---
@@ -92,18 +93,36 @@ flowchart TB
 
 ### 1. 環境需求
 - **Python 3.10+**（用於執行外部決定性驗證器與 DAG 索引編譯器）
-- **Node.js 20+** 與 [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono) CLI（`pi`）
+- **Node.js 20+** 與 [`@earendil-works/pi-coding-agent`](https://pi.dev) CLI（`pi`）
   > 💡 **硬體相容性說明**：本架構之 Hooks、驗證器與子程序調度完全不依賴本地 GPU 或特定 CPU 指令集（在無 `AVX2` 的舊款 CPU 如 Intel i5-3570K 與最新世代硬體上皆可 100% 順暢運作）。
 
-### 2. 設定 API Keys（透過環境變數注入，絕不寫入專案檔案）
-請參考受 Schema 納管的完整指南：[`memory/specs/500_MODEL_APIKEY_GUIDE.md`](memory/specs/500_MODEL_APIKEY_GUIDE.md)。
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-export GEMINI_API_KEY="AIzaSy..."
-export OPENAI_API_KEY="sk-proj-..."
-```
+### 2. 設定 API Keys 與 OAuth 憑證（受 `.gitignore` 與 `SEC-CRED` 雙重保護）
+本專案之 API Key 與訂閱 OAuth 憑證統一存放於 **`.Friday/auth.json`**（權限 `0600`，已被 `.gitignore` 排除且受 `workspace-guard.ts` 的 `SEC-CRED` 規則硬性保護，不會隨 `git push` 外洩）。完整多模型與多組 Key 分流設定請參閱：[`memory/specs/500_MODEL_APIKEY_GUIDE.md`](memory/specs/500_MODEL_APIKEY_GUIDE.md)。
 
-### 3. 執行架構完整性與五合一自動化測試
+- **方式 A（Google Cloud Vertex AI — 使用個人 Google 帳號 OAuth / 免靜態金鑰，推薦用於 `gemini-4-argon`）**：
+  1. 在本機完成 Google Cloud SDK (`gcloud`) OAuth 授權並產生 ADC 憑證（`~/.config/gcloud/application_default_credentials.json`）：
+     ```bash
+     gcloud auth login --update-adc
+     gcloud projects list   # 查詢你帳號下的 PROJECT_ID
+     ```
+  2. 啟動 `./friday`（或 `PI_CODING_AGENT_DIR=$(pwd)/.Friday pi`）後，在對話框綁定 GCP 專案與主腦模型：
+     ```text
+     /mode vertex <你的_PROJECT_ID> global
+     /mode set orchestrator google-vertex/gemini-4-argon
+     ```
+- **方式 B（Claude Pro / Max 訂閱或 OpenAI ChatGPT 訂閱 — 內建瀏覽器 OAuth 登入）**：
+  1. 啟動 `./friday` 後直接輸入 `/login`，選擇 **`Anthropic`**（或 `OpenAI`），透過彈出的瀏覽器登入訂閱帳號，Token 會自動寫入 `.Friday/auth.json`。
+  2. 綁定主腦或專家角色模型：
+     ```text
+     /mode set orchestrator anthropic/claude-sonnet-4-5
+     ```
+- **方式 C（各供應商靜態 API Key — 如 NVIDIA NIM、Anthropic、Gemini AI Studio、OpenRouter 等）**：
+  - 啟動 `./friday` 後輸入 `/mode` 進入 `2. 🔑 設定 Provider API Key`，或直接執行：
+    ```text
+    /mode key nvidia nvapi-...
+    ```
+
+### 3. 執行架構完整性與自動化測試
 在啟動 Agent 前，先用外部決定性驗證器確認所有記憶節點、DAG 圖譜與 Hooks 皆處於 100% 健康狀態：
 ```bash
 # 1. 驗證所有記憶節點 Schema、反盲從規則與執行 Verification Oracles
@@ -112,21 +131,22 @@ python3 schemas/schema_validator.py --run-oracle
 # 2. 重新編譯記憶導覽圖並執行 DAG 循環/斷鏈檢查
 python3 scripts/auto_update_map.py
 
-# 3. 執行五合一端到端架構測試套件
+# 3. 執行端到端架構測試套件
 python3 scripts/test_friday_architecture.py
 ```
 
 ### 4. 掛載可攜式大腦並啟動 `pi`
-在專案根目錄下，將 `PI_CODING_AGENT_DIR` 指向專案內的 `.Friday` 大腦即可啟動：
+在專案根目錄下直接執行 `./friday`（或 `PI_CODING_AGENT_DIR=$(pwd)/.Friday pi`）即可啟動：
 ```bash
-PI_CODING_AGENT_DIR=$(pwd)/.Friday pi
+./friday
 ```
 
 啟動後可在 `pi` 互動介面中使用內建擴充指令：
-- `/route <task>`：分析任務複雜度並推薦最佳專業 Subagent 與跨模型配置。
-- `/subagents`：檢視所有受控專業子代理清單與綁定模型。
-- `/verify-memory`：一鍵觸發外部 Schema 驗證器與 `CONTEXT_MAP.md` 同步。
-- `/dream`：執行跨 Session 睡眠記憶萃取與固化流程。
+- `/mode`：開啟**支援視窗捲動與依 Provider 分類篩選**的互動式管理選單（個別指定 `orchestrator` / `scout` / `architect` / `challenger` / `code` / `audit` / `vision` 模型、設定 Provider API Key / Vertex AI 專案、切換自動路由模式）。
+- `/mode set <角色> <provider/model>`：直接將指定角色綁定至目標模型（例：`/mode set orchestrator google-vertex/gemini-4-argon`）。
+- `/mode key <provider> <API_KEY>`：直接將指定供應商的 API Key 安全寫入 `.Friday/auth.json`（權限 `600`）。
+- `/mode vertex <PROJECT_ID> [LOCATION]`：直接設定 GCP Vertex AI 的專案代號與區域至 `.Friday/auth.json`。
+- `/mode status`：檢視所有角色目前綁定的模型與憑證認證狀態。
 
 ---
 

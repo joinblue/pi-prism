@@ -57,7 +57,6 @@ topology:
     - ".Friday/extensions/model-router.ts"
     - ".Friday/extensions/workspace-guard.ts"
     - ".Friday/extensions/epistemic-gate.ts"
-    - "AGENTS.md"
     - "schemas/schema_validator.py"
     - "scripts/auto_update_map.py"
 ---
@@ -73,8 +72,8 @@ topology:
 
 | 編號 | 盤點項目 | 現況狀態 | 具體缺失與待實作細節（100% 完整收錄） | 實際目標檔案 | 對應執行階段 |
 | :--- | :--- | :---: | :--- | :--- | :---: |
-| **優化 1** | **繁體中文強制規範** | 🟡 不夠完善 | 1. 在主腦與 **5 個子代理**強制規定「使用繁體中文思考 (`thinking`) 與回應」<br>2. 新增剛性條款：「執行任何 `bash` 指令前，必先以繁體中文說明目的與影響範圍」 | `.Friday/AGENTS.md`<br>`AGENTS.md`<br>`.Friday/agents/*.md` | **Stage 2** |
-| **優化 2** | **高信噪比三段式通報協議** | 🔴 **完全沒有** | 1. 強制定義**【結論 / 邊界與異常 / 下一步行動】**極簡三段式結構<br>2. 明訂**「客觀數據與對照表格豁免行數限制」**（砍除無意義寒暄，保留硬核資訊） | `.Friday/AGENTS.md`<br>`AGENTS.md` | **Stage 2** |
+| **優化 1** | **繁體中文強制規範** | 🟡 不夠完善 | 1. 在主腦與 **5 個子代理**強制規定「使用繁體中文思考 (`thinking`) 與回應」<br>2. 新增剛性條款：「執行任何 `bash` 指令前，必先以繁體中文說明目的與影響範圍」 | `.Friday/AGENTS.md`<br>`.Friday/agents/*.md` | **Stage 2** |
+| **優化 2** | **高信噪比三段式通報協議** | 🔴 **完全沒有** | 1. 強制定義**【結論 / 邊界與異常 / 下一步行動】**極簡三段式結構<br>2. 明訂**「客觀數據與對照表格豁免行數限制」**（砍除無意義寒暄，保留硬核資訊） | `.Friday/AGENTS.md` | **Stage 2** |
 | **優化 3** | **`workspace-guard.ts` 指令與路徑防禦升級** | 🟡 不夠完善 | 1. **引號感知（Quote-Aware）**：剝離單雙引號字串，避免 `echo "rm -rf /"` 誤判<br>2. **`$(...)` / 反引號 子殼層遞迴拆解**：防止把危險指令藏在子殼層繞過檢查<br>3. **唯讀指令豁免**：允許安全檢索（如 `grep`）讀取非機密設定而不誤殺<br>4. **鎖定 `schemas/` 防改鎖**：禁止 Agent 私自修改驗證規則開後門<br>5. **`SEC-PORTABILITY` 絕對路徑防洩漏攔截**：動態攔截 `write`/`edit` 寫入本機絕對路徑（`os.homedir()`、`/home/<user>`、`file:///`），當場退回要求改用相對路徑重寫<br>6. **自癒處方籤 (`RemediationPointer`)**：攔截時明確給出替代安全做法 | `.Friday/extensions/workspace-guard.ts` | **Stage 3** |
 | **優化 4** | **Schema 處方籤、分級散文預算 & 隱私/版本互斥檢查** | 🟡 不夠完善 | 1. **依 `artifact_type` 分級之純散文行數預算（Tiered Prose Budget）**：`constitution`/`rule`/`adr` $\le 50$ 行、`spec`/`audit` $\le 160$ 行（表格、Mermaid 與程式碼區塊豁免）<br>2. **`AS-05` 路徑可攜性與隱私檢查**：掃描記憶節點內文，禁止出現本機絕對路徑（`/home/...` 或 `file:///`）<br>3. **`AS-06` 新舊版本互斥與過時狀態檢查**：被 `supersedes` 取代之舊節點必須降級為 `archived` 或 `deprecated`，防止新舊規範同時 `verified` 導致 Agent 錯亂<br>4. **YAML 處方籤骨架輸出**：當驗證未通過時，自動印出標準 YAML Frontmatter 修復範本 | `schemas/schema_validator.py` | **Stage 4** |
 | **優化 5** | **`auto_update_map.py` 拓撲與死鏈自癒** | 🟡 不夠完善 | 1. **Markdown 死鏈自動修復 (`heal_dead_links`)**：檔案搬移後自動修正文內連結<br>2. **Python / TypeScript AST Import 依賴掃描**：自動解析真實程式碼依賴並寫入 `CONTEXT_INDEX.json` 與 `CONTEXT_MAP.md` | `scripts/auto_update_map.py` | **Stage 5** |
@@ -104,7 +103,7 @@ topology:
 
 ### Stage 2：繁體中文剛性規範 ＋ 高信噪比三段式通報 ＋ 唯一活躍台帳 `LEDGER.md`
 1. `[FACT]` **修改目標（涵蓋【優化 1】＋【優化 2】＋【優化 6】）**：
-   - [`.Friday/AGENTS.md`](../../.Friday/AGENTS.md)、[`AGENTS.md`](../../AGENTS.md)、[`.Friday/agents/*.md`](../../.Friday/agents/scout.md)：寫入強制繁體中文思考與回應條款、「執行 `bash` 前必先以繁中說明目的」、以及【結論 / 邊界與異常 / 下一步行動】三段式通報協議（客觀數據與表格豁免行數限制）。
+   - [`.Friday/AGENTS.md`](../../.Friday/AGENTS.md)、[`.Friday/agents/*.md`](../../.Friday/agents/scout.md)：寫入強制繁體中文思考與回應條款、「執行 `bash` 前必先以繁中說明目的」、以及【結論 / 邊界與異常 / 下一步行動】三段式通報協議（客觀數據與表格豁免行數限制）。
    - 新增 `memory/LEDGER.md`（上限 $\le 80$ 行之唯一活躍工單台帳）與 `.Friday/skills/` 通用工程技能書。
 
 ---

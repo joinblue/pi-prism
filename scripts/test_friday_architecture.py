@@ -289,7 +289,7 @@ def test_6_stage2_governance_and_ledger() -> None:
     print("\n" + "=" * 72)
     print("🧪 [TEST 6] Stage 2: 繁體中文強制規範、bash 前置說明、三段式通報、LEDGER.md (<=80行) 與通用技能書查核")
     print("=" * 72)
-    for doc_path in [FRIDAY_BRAIN / "AGENTS.md", PROJECT_ROOT / "AGENTS.md"]:
+    for doc_path in [FRIDAY_BRAIN / "AGENTS.md"]:
         content = doc_path.read_text(encoding="utf-8")
         assert "繁體中文" in content, f"{doc_path} missing Traditional Chinese mandate"
         assert "bash" in content and "目的" in content, f"{doc_path} missing bash pre-execution explanation clause"

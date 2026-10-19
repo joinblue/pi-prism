@@ -2,7 +2,7 @@
   "schema_version": "2.0.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-18T14:48:12Z",
+  "generated_at": "2026-10-19T13:53:27Z",
   "total_nodes": 8,
   "domain_registry": {
     "000": {
@@ -134,7 +134,7 @@
           ],
           "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
           "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md",
-          "sha256_16": "acf4101a88e78d5b",
+          "sha256_16": "59e0e14895b542fb",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -151,7 +151,6 @@
             ".Friday/extensions/model-router.ts",
             ".Friday/extensions/workspace-guard.ts",
             ".Friday/extensions/epistemic-gate.ts",
-            "AGENTS.md",
             "schemas/schema_validator.py",
             "scripts/auto_update_map.py"
           ]

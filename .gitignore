@@ -8,6 +8,7 @@
 .Friday/sessions/
 .Friday/bin/
 .Friday/models-store.json
+.Friday/role-models.json
 
 # Python & Node Caches
 __pycache__/

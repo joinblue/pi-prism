@@ -36,10 +36,12 @@
      - `worker` / `code` (`poolside/laguna-xs-2.1`, `0.28s TTFT`)
      - `auditor` / `audit` (`z-ai/glm-5.3-flash`, `0.60s TTFT`)
 
-## 3. 內建專屬指令一覽
+## 3. 專案目錄與內建專屬指令
 
-- `/mode [auto|orchestrator|scout|architect|challenger|code|audit|vision]`：檢視或切換 Friday 模型路由模式。
-- `/guard [reset]`：檢視當前工作區鎖定邊界 (`ctx.cwd`) 與臨時授權目錄，或重設授權。
-- `/validate`：執行獨立驗證器 (`schema_validator.py`) 並重編 `CONTEXT_INDEX.json` 與 `CONTEXT_MAP.md`。
-- `/dream [deep]`：啟動三階段睡眠記憶鞏固流水線（NREM 篩選 ➔ REM 提純台帳與決策 ➔ 神諭驗收）。
-- `/team <任務描述>`：啟動 `scout -> architect -> challenger -> worker -> auditor` 五階段跨模型協作流水線。
+- **核心目錄**：`.Friday/`（大腦核心、技能書 `.Friday/skills/` 與子代理 `.Friday/agents/*.md`）、`schemas/`（標頭與拓撲驗證器 `schema_validator.py`）、`scripts/`（索引編譯 `auto_update_map.py` 與五合一測試 `test_friday_architecture.py`）、`memory/`（活躍台帳 `LEDGER.md`、核心規範 `codex/`、架構規格 `specs/`、驗收紀錄 `audits/`）。
+- **專屬指令**：
+  - `/mode [auto|orchestrator|scout|architect|challenger|code|audit|vision]`：檢視或切換 Friday 模型路由模式。
+  - `/guard [reset]`：檢視當前工作區鎖定邊界 (`ctx.cwd`) 與臨時授權目錄，或重設授權。
+  - `/validate`：執行獨立驗證器 (`schema_validator.py`) 並重編 `CONTEXT_INDEX.json` 與 `CONTEXT_MAP.md`。
+  - `/dream [deep]`：啟動三階段睡眠記憶鞏固流水線（NREM 篩選 ➔ REM 提純台帳與決策 ➔ 神諭驗收）。
+  - `/team <任務描述>`：啟動 `scout -> architect -> challenger -> worker -> auditor` 五階段跨模型協作流水線。
