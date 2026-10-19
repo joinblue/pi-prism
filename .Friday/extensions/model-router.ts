@@ -1,20 +1,18 @@
 /**
  * Friday Orchestrator-First Router & Specialist Dispatcher (Pillar 3 - model-router.ts)
  * =====================================================================================
- * Stage 1+ Upgrade:
- * 1. Fixed Main Orchestrator (`orchestrator` -> default `nvidia/nemotron-3-super-120b-a12b`, <1s TTFT):
- *    Eliminates fragile keyword-based main-brain switching and preserves KV Cache across turns.
- *    Automatically switches only for:
- *      - `request.reason === "direct"` (compaction / background summary) -> `scout`
- *      - Multimodal image input (`hasImageAttachment`, including `user` attachments AND `read` toolResult images) -> `vision`
- *      - Explicit manual `/mode` override
- * 2. Zero-Cold-Start Specialist Dispatch Tool (`dispatch_specialist`):
- *    Allows the Main Orchestrator to invoke any specialist model directly in-process via
- *    `ctx.modelRegistry.complete(...)` without subprocess cold-start overhead, with full
- *    multimodal `imagePath` attachment support for `vision`.
- * 3. Unified `/mode` Role-Model & Credential Manager:
- *    Supports interactive TUI menu and CLI subcommands to configure models per role
- *    (`.Friday/role-models.json` + `.Friday/agents/*.md`) and Provider credentials (`.Friday/auth.json`).
+ * Stage 1+ & Router Handoff (M1 ~ M5) Upgrade:
+ * 1. Anti-Hijack Main Orchestrator (`route()` 100% locked to `ROLE_MODELS.orchestrator`):
+ *    Never hijacks main conversation history to 30B `vision` on image attachments; all image
+ *    analysis is offloaded to `dispatch_specialist(specialist="vision", imagePath="...")` so
+ *    image Base64 tokens never pollute the flagship orchestrator's context or break KV Cache.
+ * 2. Zero-Cold-Start Specialist Dispatch Tool (`dispatch_specialist`) with Auto-Fallback Chain (M2)
+ *    and Direct Multi-File Offload (`filePaths: string[]`, M3):
+ *    Never falls back to `ROLE_MODELS.orchestrator` (protecting flagship tokens) and automatically
+ *    iterates `ROLE_FALLBACK_CHAINS[role]` on `ResourceExhausted` / `429` / `5xx`.
+ * 3. Tool-Call Token Offload Gate (M4) & Dual Strategy Modes (`apex-commander` | `hybrid-synergy`, M5):
+ *    Hard-blocks direct image `read` and excessive multi-file `read` in `apex-commander` mode,
+ *    and injects dynamic `[MANDATE]` directives on `before_agent_start`.
  */
 
 import * as fs from "node:fs";
@@ -37,7 +35,7 @@ export const DEFAULT_ROLE_MODELS = {
 	orchestrator: "nvidia/nemotron-3-super-120b-a12b",
 	scout: "z-ai/glm-5.3-flash",
 	architect: "nvidia/nemotron-3-super-120b-a12b",
-	challenger: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+	challenger: "deepseek-ai/deepseek-v4.1-flash",
 	code: "poolside/laguna-xs-2.1",
 	audit: "z-ai/glm-5.3-flash",
 	vision: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
@@ -45,9 +43,58 @@ export const DEFAULT_ROLE_MODELS = {
 
 export type RoleName = keyof typeof DEFAULT_ROLE_MODELS;
 export type SpecialistRole = Exclude<RoleName, "orchestrator">;
+export type StrategyMode = "apex-commander" | "hybrid-synergy";
 type RouterPhase = "auto" | RoleName;
 
+export const ROLE_FALLBACK_CHAINS: Record<SpecialistRole, string[]> = {
+	scout: [
+		"z-ai/glm-5.3-flash",
+		"nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/nemotron-3-ultra-550b-a55b",
+		"deepseek-ai/deepseek-v4.1-flash",
+		"nvidia/nemotron-3-super-120b-a12b",
+	],
+	architect: [
+		"nvidia/nemotron-3-super-120b-a12b",
+		"nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/nemotron-3.5-lightning-30b-a3b",
+		"z-ai/glm-5.3",
+		"z-ai/glm-5.3-flash",
+	],
+	challenger: [
+		"deepseek-ai/deepseek-v4.1-flash",
+		"nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/nemotron-3.5-lightning-30b-a3b",
+		"z-ai/glm-5.3",
+		"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+		"z-ai/glm-5.3-flash",
+	],
+	code: [
+		"poolside/laguna-xs-2.1",
+		"nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/nemotron-3.5-lightning-30b-a3b",
+		"z-ai/glm-5.3",
+		"deepseek-ai/deepseek-v4.1-flash",
+		"z-ai/glm-5.3-flash",
+	],
+	audit: [
+		"z-ai/glm-5.3-flash",
+		"nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/nemotron-3-ultra-550b-a55b",
+		"deepseek-ai/deepseek-v4.1-flash",
+		"nvidia/nemotron-3-super-120b-a12b",
+	],
+	vision: [
+		"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+		"meta/llama-3.2-11b-vision-instruct",
+		"z-ai/glm-5.3-flash",
+		"deepseek-ai/deepseek-v4.1-flash",
+		"google/diffusiongemma-26b-a4b-it",
+	],
+};
+
 export const ROLE_MODELS: Record<RoleName, string> = { ...DEFAULT_ROLE_MODELS };
+export let STRATEGY_MODE: StrategyMode = "apex-commander";
 
 const ROLE_LABELS: Record<RoleName, string> = {
 	orchestrator: "主腦 (Orchestrator - 負責統籌與規劃)",
@@ -57,6 +104,11 @@ const ROLE_LABELS: Record<RoleName, string> = {
 	code: "工程師 (Code/Worker - 程式碼實作與重構)",
 	audit: "稽核官 (Audit/Auditor - 驗證與品質把關)",
 	vision: "視覺專家 (Vision - 圖片與圖表多模態解析)",
+};
+
+const STRATEGY_LABELS: Record<StrategyMode, string> = {
+	"apex-commander": "模式一：極致旗艦統帥省流模式 (Apex Commander — 預設，強制省流閘門 + 免費專家代讀/代工)",
+	"hybrid-synergy": "模式二：雙腦協同對抗模式 (Hybrid Synergy — 複合主腦 + 架構/紅隊雙腦共創)",
 };
 
 const ROLE_TO_AGENT_FILE: Partial<Record<RoleName, string>> = {
@@ -83,6 +135,52 @@ function getAuthFilePath(): string {
 	return path.join(getAgentDir(), "auth.json");
 }
 
+const NON_NVIDIA_PROVIDER_PREFIXES = [
+	"google-vertex/",
+	"google-antigravity/",
+	"google-gemini-cli/",
+	"anthropic/",
+	"openrouter/",
+	"ollama/",
+	"vllm/",
+];
+
+function toProviderQualifiedModelSpec(spec: string): string {
+	const trimmed = spec.trim();
+	if (NON_NVIDIA_PROVIDER_PREFIXES.some((p) => trimmed.startsWith(p))) {
+		return trimmed;
+	}
+	if (
+		trimmed.startsWith("nvidia/nvidia/") ||
+		trimmed.startsWith("nvidia/z-ai/") ||
+		trimmed.startsWith("nvidia/deepseek-ai/") ||
+		trimmed.startsWith("nvidia/poolside/") ||
+		trimmed.startsWith("nvidia/meta/") ||
+		trimmed.startsWith("nvidia/google/") ||
+		trimmed.startsWith("nvidia/openai/")
+	) {
+		return trimmed;
+	}
+	return `${DEFAULT_PROVIDER}/${trimmed}`;
+}
+
+function syncAgentMarkdownModel(role: RoleName, fullModelSpec: string): void {
+	const fileName = ROLE_TO_AGENT_FILE[role];
+	if (!fileName) return;
+	const agentPath = path.join(getAgentDir(), "agents", fileName);
+	if (!fs.existsSync(agentPath)) return;
+	try {
+		const normalizedFull = toProviderQualifiedModelSpec(fullModelSpec);
+		const content = fs.readFileSync(agentPath, "utf-8");
+		const updated = content.replace(/^model:\s*.+$/m, `model: ${normalizedFull}`);
+		if (updated !== content) {
+			fs.writeFileSync(agentPath, updated, "utf-8");
+		}
+	} catch {
+		// Best-effort sync
+	}
+}
+
 function loadPersistedRoleModels(): void {
 	const filePath = getRoleModelsFilePath();
 	if (!fs.existsSync(filePath)) return;
@@ -91,7 +189,11 @@ function loadPersistedRoleModels(): void {
 		for (const role of Object.keys(DEFAULT_ROLE_MODELS) as RoleName[]) {
 			if (typeof raw?.[role] === "string" && raw[role].trim()) {
 				ROLE_MODELS[role] = raw[role].trim();
+				syncAgentMarkdownModel(role, ROLE_MODELS[role]);
 			}
+		}
+		if (raw?.strategyMode === "apex-commander" || raw?.strategyMode === "hybrid-synergy") {
+			STRATEGY_MODE = raw.strategyMode;
 		}
 	} catch {
 		// Ignore malformed file and keep defaults
@@ -101,23 +203,11 @@ function loadPersistedRoleModels(): void {
 function savePersistedRoleModels(): void {
 	const filePath = getRoleModelsFilePath();
 	fs.mkdirSync(path.dirname(filePath), { recursive: true });
-	fs.writeFileSync(filePath, `${JSON.stringify(ROLE_MODELS, null, 2)}\n`, "utf-8");
-}
-
-function syncAgentMarkdownModel(role: RoleName, fullModelSpec: string): void {
-	const fileName = ROLE_TO_AGENT_FILE[role];
-	if (!fileName) return;
-	const agentPath = path.join(getAgentDir(), "agents", fileName);
-	if (!fs.existsSync(agentPath)) return;
-	try {
-		const content = fs.readFileSync(agentPath, "utf-8");
-		const updated = content.replace(/^model:\s*.+$/m, `model: ${fullModelSpec}`);
-		if (updated !== content) {
-			fs.writeFileSync(agentPath, updated, "utf-8");
-		}
-	} catch {
-		// Best-effort sync
-	}
+	const payload = {
+		...ROLE_MODELS,
+		strategyMode: STRATEGY_MODE,
+	};
+	fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
 }
 
 function readAuthJson(): Record<string, any> {
@@ -328,6 +418,13 @@ function findConfiguredModel(ctx: ExtensionContext, spec: string) {
 	return allModels.find((m) => m.id === trimmed);
 }
 
+function isProtectedSecretPath(resolvedPath: string): boolean {
+	const base = path.basename(resolvedPath);
+	if (base === "auth.json" || base === "application_default_credentials.json") return true;
+	if (base === ".env" || (base.startsWith(".env.") && base !== ".env.example")) return true;
+	return false;
+}
+
 const DispatchSpecialistParams = Type.Object({
 	specialist: StringEnum(["scout", "architect", "challenger", "code", "audit", "vision"] as const, {
 		description:
@@ -341,6 +438,14 @@ const DispatchSpecialistParams = Type.Object({
 			description: "Optional supporting context (code snippets, file contents, or draft proposal to review).",
 		}),
 	),
+	filePaths: Type.Optional(
+		Type.Array(
+			Type.String({
+				description:
+					"Optional list of workspace file paths to read directly in-process and attach to the specialist prompt (saves main orchestrator read tokens).",
+			}),
+		),
+	),
 	imagePath: Type.Optional(
 		Type.String({
 			description:
@@ -352,6 +457,7 @@ const DispatchSpecialistParams = Type.Object({
 export default function (pi: ExtensionAPI) {
 	loadPersistedRoleModels();
 	let forcedMode: RouterPhase = "auto";
+	let turnReadCount = 0;
 
 	function resolveRoute(
 		request: FridayRouteRequest,
@@ -385,7 +491,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerVirtualModel<FridayRouterState>({
 		provider: "pi-router",
 		id: "auto",
-		name: "Friday Orchestrator-First Router (Configurable Roles + Auto Vision)",
+		name: "Friday Orchestrator-First Router (Anti-Hijack + Specialist Fallback)",
 		reasoning: true,
 		input: ["text", "image"],
 		thinkingLevels: ["minimal", "low", "medium", "high"],
@@ -405,31 +511,128 @@ export default function (pi: ExtensionAPI) {
 				return resolveRoute(request, ctx, forcedMode, targetId, `Manual /mode ${forcedMode}`);
 			}
 
-			// 3. Multimodal image attachment (user upload OR `read` toolResult image) -> route to vision specialist
-			if (hasImageAttachment(request.messages)) {
-				return resolveRoute(request, ctx, "vision", ROLE_MODELS.vision, "Image attachment detected in current turn");
-			}
-
-			// 4. Default Orchestrator-First: fixed flagship brain (preserves KV cache & reasoning stability)
+			// 3. M1 Anti-Hijack Orchestrator-First: 100% locked to ROLE_MODELS.orchestrator.
+			// Never auto-hijacks the main conversation to 30B vision on image blocks (prevents KV cache reset & base64 token pollution).
 			return resolveRoute(
 				request,
 				ctx,
 				"orchestrator",
 				ROLE_MODELS.orchestrator,
-				"Fixed Main Orchestrator (Orchestrator-First)",
+				"Fixed Main Orchestrator (Orchestrator-First Anti-Hijack)",
 			);
 		},
+	});
+
+	pi.on("turn_start", async () => {
+		turnReadCount = 0;
+	});
+
+	pi.on("before_agent_start", async (event) => {
+		loadPersistedRoleModels();
+		turnReadCount = 0;
+		const promptText = typeof event.prompt === "string" ? event.prompt : "";
+		if (!promptText) return undefined;
+
+		const mandates: string[] = [];
+		if (STRATEGY_MODE === "apex-commander") {
+			if (extractImagePathFromText(promptText)) {
+				mandates.push(
+					'[MANDATE: 偵測到圖片路徑，嚴禁使用 read 讀取圖片，必須立即呼叫 dispatch_specialist(specialist="vision", imagePath="...", task="...")！]',
+				);
+			}
+			if (/(比對|對照|檢查.*檔案|多個檔案|不一致|衝突|compare|audit.*files)/i.test(promptText)) {
+				mandates.push(
+					'[MANDATE: 偵測到多檔檢索/對比需求，請優先呼叫 dispatch_specialist(specialist="scout"|"challenger", filePaths=[...], task="...") 或 subagent(agent="scout")，禁止主腦逐一 read 所有檔案！]',
+				);
+			}
+			if (/(實作|重構|修改.*程式碼|撰寫.*測試|修復.*bug|implement|refactor)/i.test(promptText)) {
+				mandates.push(
+					'[MANDATE: 偵測到程式碼實作/重構需求，主腦確認架構後請優先委派 subagent(agent="worker", task="...") 於獨立沙盒施工並驗證！]',
+				);
+			}
+		} else if (STRATEGY_MODE === "hybrid-synergy") {
+			if (/(架構|設計|重構|演算法|ADR|architecture|refactor|design)/i.test(promptText)) {
+				mandates.push(
+					'[MANDATE (Hybrid-Synergy Mode): 偵測到複雜設計與重構任務，主腦在動手修改前，請先呼叫 dispatch_specialist(specialist="architect"|"challenger") 進行跨模型雙腦推演與紅隊挑刺！]',
+				);
+			}
+		}
+
+		if (mandates.length > 0) {
+			return {
+				systemPrompt: `${event.systemPrompt}\n\n${mandates.join("\n")}`,
+			};
+		}
+		return undefined;
+	});
+
+	pi.on("tool_call", async (event, ctx) => {
+		loadPersistedRoleModels();
+		if (STRATEGY_MODE !== "apex-commander" || forcedMode !== "auto") return undefined;
+		if (event.toolName !== "read") return undefined;
+
+		// Do not restrict subagent workers (e.g., laguna-xs-2.1 or glm-5.3-flash) running in isolated subprocesses
+		const activeModelFull = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "";
+		const isMainOrchestrator =
+			!ctx.model ||
+			ctx.model.provider === "pi-router" ||
+			activeModelFull === ROLE_MODELS.orchestrator ||
+			ctx.model.id === ROLE_MODELS.orchestrator;
+		if (!isMainOrchestrator) return undefined;
+
+		const rawPath = String((event.input as any)?.path ?? "").trim();
+		if (!rawPath) return undefined;
+
+		// Rule 1: Hard-block reading images directly into Main Orchestrator context
+		if (inferImageMimeTypeFromExtension(rawPath) !== null) {
+			return {
+				block: true,
+				reason:
+					'🛡️ [Token Offload Gate] 旗艦省流模式下，禁止使用 read 將圖片 Base64 載入主對話 Context！請立即改呼叫 dispatch_specialist(specialist="vision", imagePath="...", task="...") 由免費視覺專家解析。',
+			};
+		}
+
+		// Rule 2: Multi-file / Large-file Read Quota Gate (> 3 files in a single turn, or > 350 lines without limit outside memory/)
+		turnReadCount += 1;
+		const resolvedPath = path.isAbsolute(rawPath) ? rawPath : path.resolve(ctx.cwd, rawPath);
+		const relToCwd = path.relative(ctx.cwd, resolvedPath).replace(/\\/g, "/");
+		const isGovernedMemoryFile = relToCwd === "memory" || relToCwd.startsWith("memory/");
+
+		let exceedsLineLimit = false;
+		if (!isGovernedMemoryFile && !(event.input as any)?.limit && fs.existsSync(resolvedPath)) {
+			try {
+				const stat = fs.statSync(resolvedPath);
+				if (stat.isFile() && stat.size > 4096) {
+					const lineCount = fs.readFileSync(resolvedPath, "utf-8").split("\n").length;
+					if (lineCount > 350) {
+						exceedsLineLimit = true;
+					}
+				}
+			} catch {
+				// Ignore stat/read errors and let the read tool handle them
+			}
+		}
+
+		if (turnReadCount > 3 || exceedsLineLimit) {
+			return {
+				block: true,
+				reason:
+					'🛡️ [Token Offload Gate] 旗艦省流模式下，單回合禁止直接連續 read 超過 3 個檔案或讀取 >350 行巨型檔案！請改用 dispatch_specialist(specialist="scout"|"challenger", filePaths=[...], task="...") 或 subagent(agent="scout"|"worker", task="...") 由免費專家代讀分析。',
+			};
+		}
+
+		return undefined;
 	});
 
 	pi.registerTool({
 		name: "dispatch_specialist",
 		label: "Dispatch Specialist",
 		description: [
-			"Zero-cold-start in-process specialist model dispatcher (<1s TTFT).",
-			"Use this tool when the Main Orchestrator needs fast specialized output, multimodal vision analysis, or cross-model dialectical review without spawning a full CLI subprocess:",
+			"Zero-cold-start in-process specialist model dispatcher (<1s TTFT) with auto-fallback chain and direct multi-file read (`filePaths`).",
+			"Use this tool when the Main Orchestrator needs fast specialized output, multi-file reading/comparison, multimodal vision analysis, or cross-model dialectical review without burning main orchestrator tokens:",
 			"- challenger: Cross-model anti-sycophancy review",
 			"- code: Focused code synthesis or refactoring",
-			"- scout: Fast 1M-context summarization or extraction",
+			"- scout: Fast 1M-context summarization or multi-file extraction",
 			"- architect: Deep architectural analysis",
 			"- audit: Verification output check",
 			"- vision: Multimodal image/chart analysis (pass `imagePath` to attach local image file)",
@@ -438,25 +641,91 @@ export default function (pi: ExtensionAPI) {
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			loadPersistedRoleModels();
 			const role = params.specialist as SpecialistRole;
-			const targetModelSpec = ROLE_MODELS[role];
-			const model =
-				findConfiguredModel(ctx, targetModelSpec) ?? findConfiguredModel(ctx, ROLE_MODELS.orchestrator);
 
-			if (!model) {
+			// M2: Build deduplicated candidate chain from ROLE_MODELS[role] + ROLE_FALLBACK_CHAINS[role].
+			// NEVER fallback to ROLE_MODELS.orchestrator (protects paid flagship tokens).
+			const candidateSpecs = Array.from(new Set([ROLE_MODELS[role], ...(ROLE_FALLBACK_CHAINS[role] ?? [])]));
+			const candidateModels: NonNullable<ReturnType<typeof findConfiguredModel>>[] = [];
+			const seenModelKeys = new Set<string>();
+			for (const spec of candidateSpecs) {
+				const resolved = findConfiguredModel(ctx, spec);
+				if (resolved) {
+					const key = `${resolved.provider}/${resolved.id}`;
+					if (!seenModelKeys.has(key)) {
+						seenModelKeys.add(key);
+						candidateModels.push(resolved);
+					}
+				}
+			}
+
+			if (candidateModels.length === 0) {
 				return {
 					content: [
 						{
 							type: "text",
-							text: `❌ Specialist model "${targetModelSpec}" not found in modelRegistry.`,
+							text: `❌ Specialist models for role "${role}" (${candidateSpecs.join(" -> ")}) not found in modelRegistry. (Refused to fallback to orchestrator to protect flagship tokens.)`,
 						},
 					],
 					isError: true,
 				};
 			}
 
-			const userContentText = params.context
-				? `### Task\n${params.task}\n\n### Context\n${params.context}`
-				: params.task;
+			// M3: Direct in-process filePaths reading (0 main-brain file-reading tokens)
+			const attachedFileSections: string[] = [];
+			if (Array.isArray(params.filePaths) && params.filePaths.length > 0) {
+				const rootResolved = path.resolve(ctx.cwd);
+				for (const rawFilePath of params.filePaths) {
+					const cleaned = rawFilePath.trim();
+					if (!cleaned) continue;
+					const absPath = path.isAbsolute(cleaned) ? path.resolve(cleaned) : path.resolve(rootResolved, cleaned);
+					const insideWorkspace =
+						absPath === rootResolved || absPath.startsWith(`${rootResolved}${path.sep}`);
+					if (!insideWorkspace) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `❌ [dispatch_specialist] Out-of-bounds filePath blocked: ${rawFilePath} (must stay inside workspace ${rootResolved})`,
+								},
+							],
+							isError: true,
+						};
+					}
+					if (isProtectedSecretPath(absPath)) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `❌ [dispatch_specialist] Access to protected credential file blocked: ${rawFilePath}`,
+								},
+							],
+							isError: true,
+						};
+					}
+					if (!fs.existsSync(absPath) || !fs.statSync(absPath).isFile()) {
+						attachedFileSections.push(`--- [File: ${cleaned}] ---\n(File not found: ${absPath})`);
+						continue;
+					}
+					try {
+						const fileText = fs.readFileSync(absPath, "utf-8");
+						const relLabel = path.relative(rootResolved, absPath).replace(/\\/g, "/");
+						attachedFileSections.push(`--- [File: ${relLabel}] ---\n${fileText}`);
+					} catch (err: any) {
+						attachedFileSections.push(
+							`--- [File: ${cleaned}] ---\n(Error reading file: ${err?.message ?? String(err)})`,
+						);
+					}
+				}
+			}
+
+			const promptParts: string[] = [`### Task\n${params.task}`];
+			if (params.context) {
+				promptParts.push(`### Context\n${params.context}`);
+			}
+			if (attachedFileSections.length > 0) {
+				promptParts.push(`### Attached Files\n${attachedFileSections.join("\n\n")}`);
+			}
+			const userContentText = promptParts.join("\n\n");
 
 			const contentBlocks: Array<TextContent | ImageContent> = [{ type: "text", text: userContentText }];
 
@@ -489,41 +758,87 @@ export default function (pi: ExtensionAPI) {
 			const basePrompt = buildSpecialistSystemPrompt(role);
 			const fullSystemPrompt = indexSummary ? `${basePrompt}\n${indexSummary}` : basePrompt;
 
-			const assistantMsg = await ctx.modelRegistry.complete(
-				model,
-				{
-					systemPrompt: fullSystemPrompt,
-					messages: [
+			// M2: Iterate candidateModels with automatic fallback on ResourceExhausted / 429 / 5xx / error
+			const fallbackErrors: string[] = [];
+			let lastAssistantMsg: any = null;
+			let selectedModel = candidateModels[0]!;
+
+			for (let i = 0; i < candidateModels.length; i++) {
+				const candidate = candidateModels[i]!;
+				selectedModel = candidate;
+				const candidateSignal = signal
+					? AbortSignal.any([signal, AbortSignal.timeout(10000)])
+					: AbortSignal.timeout(10000);
+				try {
+					const assistantMsg = await ctx.modelRegistry.complete(
+						candidate,
 						{
-							role: "user",
-							content: contentBlocks,
-							timestamp: Date.now(),
+							systemPrompt: fullSystemPrompt,
+							messages: [
+								{
+									role: "user",
+									content: contentBlocks,
+									timestamp: Date.now(),
+								},
+							],
 						},
-					],
-				},
-				{ signal },
-			);
+						{ signal: candidateSignal },
+					);
+					lastAssistantMsg = assistantMsg;
+					const textBlocks = assistantMsg.content
+						.filter((b): b is { type: "text"; text: string } => b.type === "text")
+						.map((b) => b.text);
+					const thinkingBlocks = (assistantMsg.content as any[])
+						.filter((b) => b?.type === "thinking" && typeof b.thinking === "string")
+						.map((b) => b.thinking);
+					const outputText = textBlocks.join("\n").trim() || thinkingBlocks.join("\n").trim();
+					const isErr = assistantMsg.stopReason === "error" || Boolean(assistantMsg.errorMessage);
 
-			const textBlocks = assistantMsg.content
-				.filter((b): b is { type: "text"; text: string } => b.type === "text")
-				.map((b) => b.text);
-			const outputText = textBlocks.join("\n").trim() || assistantMsg.errorMessage || "(empty specialist response)";
-			const isErr = assistantMsg.stopReason === "error" || Boolean(assistantMsg.errorMessage);
+					if (!isErr && outputText) {
+						const fallbackNotice =
+							i > 0
+								? `⚡ *[Auto-Fallback Triggered: ${fallbackErrors.join(" | ")} -> Switched to ${candidate.provider}/${candidate.id}]*\n\n`
+								: "";
+						return {
+							content: [
+								{
+									type: "text",
+									text: `🤖 **[Specialist: ${role} | Model: ${candidate.provider}/${candidate.id}]**\n\n${fallbackNotice}${outputText}`,
+								},
+							],
+							details: {
+								specialist: role,
+								model: `${candidate.provider}/${candidate.id}`,
+								fallbackAttempts: i,
+								stopReason: assistantMsg.stopReason,
+								usage: assistantMsg.usage,
+							},
+							isError: false,
+						};
+					}
 
+					const errReason = assistantMsg.errorMessage || `stopReason=${assistantMsg.stopReason} (empty output)`;
+					fallbackErrors.push(`${candidate.provider}/${candidate.id}: ${errReason}`);
+				} catch (err: any) {
+					fallbackErrors.push(`${candidate.provider}/${candidate.id}: ${err?.message ?? String(err)}`);
+				}
+			}
+
+			const errorSummary = fallbackErrors.join("\n- ");
 			return {
 				content: [
 					{
 						type: "text",
-						text: `🤖 **[Specialist: ${role} | Model: ${model.provider}/${model.id}]**\n\n${outputText}`,
+						text: `❌ **[Specialist: ${role} | All Candidate Models Exhausted]**\n- ${errorSummary}`,
 					},
 				],
 				details: {
 					specialist: role,
-					model: `${model.provider}/${model.id}`,
-					stopReason: assistantMsg.stopReason,
-					usage: assistantMsg.usage,
+					model: `${selectedModel.provider}/${selectedModel.id}`,
+					fallbackErrors,
+					stopReason: lastAssistantMsg?.stopReason ?? "error",
 				},
-				isError: isErr,
+				isError: true,
 			};
 		},
 	});
@@ -533,7 +848,7 @@ export default function (pi: ExtensionAPI) {
 		const authData = readAuthJson();
 		const configuredProviders = Object.keys(authData);
 		const lines: string[] = [
-			`🧠 Friday 路由與角色模型配置 (目前鎖定模式: ${forcedMode.toUpperCase()})`,
+			`🧠 Friday 路由與角色模型配置 (鎖定模式: ${forcedMode.toUpperCase()} | 調度策略: ${STRATEGY_MODE})`,
 			`──────────────────────────────────────────────────`,
 		];
 		for (const role of Object.keys(DEFAULT_ROLE_MODELS) as RoleName[]) {
@@ -545,15 +860,17 @@ export default function (pi: ExtensionAPI) {
 			lines.push(`  • ${role.padEnd(12, " ")} : ${fullLabel} [${badge}]`);
 		}
 		lines.push(`──────────────────────────────────────────────────`);
+		lines.push(`⚙️ 目前調度策略模式 (strategyMode): ${STRATEGY_MODE} — ${STRATEGY_LABELS[STRATEGY_MODE]}`);
 		lines.push(
 			`🔑 已設定憑證之 Providers (.Friday/auth.json): ${configuredProviders.length > 0 ? configuredProviders.join(", ") : "(無)"}`,
 		);
 		lines.push(`💡 快速指令:`);
-		lines.push(`  • /mode                         : 開啟互動式設定選單 (切換模式 / 指定各角色模型 / 設定 API Key)`);
-		lines.push(`  • /mode set <角色> <模型>       : 例 /mode set orchestrator google-vertex/gemini-4-argon`);
-		lines.push(`  • /mode key <provider> <APIKey> : 例 /mode key anthropic sk-ant-...`);
-		lines.push(`  • /mode vertex <ProjectID> [區] : 例 /mode vertex my-gcp-project global`);
-		lines.push(`  • /mode <auto|角色名稱>         : 切換自動路由或強制鎖定單一角色`);
+		lines.push(`  • /mode                                         : 開啟互動式設定選單`);
+		lines.push(`  • /mode strategy <apex-commander|hybrid-synergy>: 切換雙調度策略模式`);
+		lines.push(`  • /mode set <角色> <模型>                       : 例 /mode set orchestrator google-vertex/gemini-4-argon`);
+		lines.push(`  • /mode key <provider> <APIKey>                 : 例 /mode key anthropic sk-ant-...`);
+		lines.push(`  • /mode vertex <ProjectID> [區]                 : 例 /mode vertex my-gcp-project global`);
+		lines.push(`  • /mode <auto|角色名稱>                         : 切換自動路由或強制鎖定單一角色`);
 		return lines.join("\n");
 	}
 
@@ -682,8 +999,9 @@ export default function (pi: ExtensionAPI) {
 			`1. 🎯 設定各角色綁定模型 (主腦 orchestrator / 各分工專家)`,
 			`2. 🔑 設定 Provider API Key 與 GCP Vertex 專案憑證 (.Friday/auth.json)`,
 			`3. 🔄 切換路由鎖定模式 (目前: ${forcedMode.toUpperCase()})`,
-			`4. 📋 檢視目前角色模型與憑證狀態總覽`,
-			`5. ♻️ 重設所有角色為預設 NVIDIA 極速模型池`,
+			`4. ⚙️ 切換雙調度策略模式 (目前: ${STRATEGY_MODE})`,
+			`5. 📋 檢視目前角色模型與憑證狀態總覽`,
+			`6. ♻️ 重設所有角色為預設極速模型池`,
 		]);
 		if (!action) return;
 
@@ -853,7 +1171,7 @@ export default function (pi: ExtensionAPI) {
 			const modeChoices: Array<{ id: RouterPhase; label: string }> = [
 				{
 					id: "auto",
-					label: `auto — 自動路由 (固定主腦 ${ROLE_MODELS.orchestrator} + 自動圖片轉 Vision + 自動壓縮轉 Scout) [推薦]`,
+					label: `auto — 自動路由 (固定主腦 ${ROLE_MODELS.orchestrator} + 專家/子代理分流 + 自動壓縮轉 Scout) [推薦]`,
 				},
 				...(Object.keys(DEFAULT_ROLE_MODELS) as RoleName[]).map((r) => ({
 					id: r,
@@ -871,7 +1189,7 @@ export default function (pi: ExtensionAPI) {
 			if (targetMode === "auto") {
 				const shortName = ROLE_MODELS.orchestrator.split("/").pop() ?? ROLE_MODELS.orchestrator;
 				ctx.ui.setStatus("friday-router", `🧠 [ORCHESTRATOR] ${shortName}`);
-				ctx.ui.notify(`✅ 已切換為 AUTO 模式 (主腦: ${ROLE_MODELS.orchestrator} + 自動視覺/專家分流)。`, "info");
+				ctx.ui.notify(`✅ 已切換為 AUTO 模式 (主腦: ${ROLE_MODELS.orchestrator} + 專家分流)。`, "info");
 			} else {
 				const targetId = ROLE_MODELS[targetMode];
 				ctx.ui.setStatus("friday-router", `🧠 [LOCK:${targetMode.toUpperCase()}] ${targetId.split("/").pop()}`);
@@ -881,28 +1199,39 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		if (action.startsWith("4.")) {
-			ctx.ui.notify(formatStatusSummary(ctx), "info");
+			const strategyChoice = await scrollableSelect(ctx, "請選擇 Friday 雙調度策略模式 (strategyMode):", [
+				`apex-commander — ${STRATEGY_LABELS["apex-commander"]}`,
+				`hybrid-synergy — ${STRATEGY_LABELS["hybrid-synergy"]}`,
+			]);
+			if (!strategyChoice) return;
+			const chosenStrategy = strategyChoice.split(" ")[0] as StrategyMode;
+			STRATEGY_MODE = chosenStrategy;
+			savePersistedRoleModels();
+			ctx.ui.notify(`✅ 已切換調度策略為 [${STRATEGY_MODE}]: ${STRATEGY_LABELS[STRATEGY_MODE]}`, "info");
 			return;
 		}
 
 		if (action.startsWith("5.")) {
+			ctx.ui.notify(formatStatusSummary(ctx), "info");
+			return;
+		}
+
+		if (action.startsWith("6.")) {
 			for (const role of Object.keys(DEFAULT_ROLE_MODELS) as RoleName[]) {
 				ROLE_MODELS[role] = DEFAULT_ROLE_MODELS[role];
-				syncAgentMarkdownModel(role, `${DEFAULT_PROVIDER}/${DEFAULT_ROLE_MODELS[role]}`);
+				syncAgentMarkdownModel(role, DEFAULT_ROLE_MODELS[role]);
 			}
-			const roleFile = getRoleModelsFilePath();
-			if (fs.existsSync(roleFile)) {
-				fs.unlinkSync(roleFile);
-			}
+			STRATEGY_MODE = "apex-commander";
+			savePersistedRoleModels();
 			forcedMode = "auto";
 			ctx.ui.setStatus("friday-router", "🧠 [ORCHESTRATOR] nemotron-3-super-120b-a12b");
-			ctx.ui.notify("✅ 已重設所有角色為預設 NVIDIA 極速模型池，並恢復 AUTO 模式。", "info");
+			ctx.ui.notify("✅ 已重設所有角色為預設極速模型池，並恢復 AUTO 與 apex-commander 模式。", "info");
 		}
 	}
 
 	pi.registerCommand("mode", {
 		description:
-			"Friday 路由、各角色模型綁定與憑證管理: /mode | /mode set <role> <model> | /mode key <provider> <key> | /mode vertex <project> [loc] | /mode status",
+			"Friday 路由、各角色模型綁定、調度策略與憑證管理: /mode | /mode strategy <apex-commander|hybrid-synergy> | /mode set <role> <model> | /mode key <provider> <key> | /mode vertex <project> [loc] | /mode status",
 		handler: async (args, ctx) => {
 			loadPersistedRoleModels();
 			const tokens = args
@@ -927,23 +1256,37 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			// 3. "/mode reset"
+			// 3. "/mode strategy <apex-commander|hybrid-synergy>"
+			if (sub === "strategy") {
+				const targetStrategy = tokens[1]?.toLowerCase() as StrategyMode | undefined;
+				if (targetStrategy !== "apex-commander" && targetStrategy !== "hybrid-synergy") {
+					ctx.ui.notify(
+						`❌ 用法: /mode strategy <apex-commander|hybrid-synergy>\n目前模式: ${STRATEGY_MODE} (${STRATEGY_LABELS[STRATEGY_MODE]})`,
+						"warning",
+					);
+					return;
+				}
+				STRATEGY_MODE = targetStrategy;
+				savePersistedRoleModels();
+				ctx.ui.notify(`✅ 已切換調度策略模式為 [${STRATEGY_MODE}]: ${STRATEGY_LABELS[STRATEGY_MODE]}`, "info");
+				return;
+			}
+
+			// 4. "/mode reset"
 			if (sub === "reset") {
 				for (const role of Object.keys(DEFAULT_ROLE_MODELS) as RoleName[]) {
 					ROLE_MODELS[role] = DEFAULT_ROLE_MODELS[role];
-					syncAgentMarkdownModel(role, `${DEFAULT_PROVIDER}/${DEFAULT_ROLE_MODELS[role]}`);
+					syncAgentMarkdownModel(role, DEFAULT_ROLE_MODELS[role]);
 				}
-				const roleFile = getRoleModelsFilePath();
-				if (fs.existsSync(roleFile)) {
-					fs.unlinkSync(roleFile);
-				}
+				STRATEGY_MODE = "apex-commander";
+				savePersistedRoleModels();
 				forcedMode = "auto";
 				ctx.ui.setStatus("friday-router", "🧠 [ORCHESTRATOR] nemotron-3-super-120b-a12b");
 				ctx.ui.notify("✅ 已重設所有角色為預設模型池。", "info");
 				return;
 			}
 
-			// 4. "/mode set <role> <provider/model>"
+			// 5. "/mode set <role> <provider/model>"
 			if (sub === "set") {
 				const roleArg = tokens[1]?.toLowerCase() as RoleName | undefined;
 				const modelArg = tokens.slice(2).join(" ");
@@ -959,7 +1302,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			// 5. "/mode key <provider> <apiKey>"
+			// 6. "/mode key <provider> <apiKey>"
 			if (sub === "key") {
 				const providerId = tokens[1]?.toLowerCase();
 				const apiKey = tokens.slice(2).join(" ").trim();
@@ -981,7 +1324,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			// 6. "/mode vertex <projectId> [location]"
+			// 7. "/mode vertex <projectId> [location]"
 			if (sub === "vertex") {
 				const projectId = tokens[1]?.trim();
 				const location = tokens[2]?.trim() || "global";
@@ -1009,7 +1352,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			// 7. Direct mode switch: "/mode <auto|orchestrator|scout|architect|challenger|code|audit|vision>"
+			// 8. Direct mode switch: "/mode <auto|orchestrator|scout|architect|challenger|code|audit|vision>"
 			const validModes: RouterPhase[] = [
 				"auto",
 				"orchestrator",
@@ -1022,7 +1365,7 @@ export default function (pi: ExtensionAPI) {
 			];
 			if (!validModes.includes(sub as RouterPhase)) {
 				ctx.ui.notify(
-					`❌ 無效的子指令或模式 "${sub}"。\n可用指令: /mode (互動選單) | /mode status | /mode set <角色> <模型> | /mode key <provider> <key> | /mode vertex <project> [loc] | /mode <${validModes.join("|")}>`,
+					`❌ 無效的子指令或模式 "${sub}"。\n可用指令: /mode (互動選單) | /mode status | /mode strategy <apex-commander|hybrid-synergy> | /mode set <角色> <模型> | /mode key <provider> <key> | /mode vertex <project> [loc] | /mode <${validModes.join("|")}>`,
 					"warning",
 				);
 				return;
@@ -1032,7 +1375,7 @@ export default function (pi: ExtensionAPI) {
 			if (forcedMode === "auto") {
 				const shortName = ROLE_MODELS.orchestrator.split("/").pop() ?? ROLE_MODELS.orchestrator;
 				ctx.ui.setStatus("friday-router", `🧠 [ORCHESTRATOR] ${shortName}`);
-				ctx.ui.notify(`✅ 已切換為 AUTO (固定主腦 ${ROLE_MODELS.orchestrator} + 自動視覺分流) 模式。`, "info");
+				ctx.ui.notify(`✅ 已切換為 AUTO (固定主腦 ${ROLE_MODELS.orchestrator} + 專家分流) 模式。`, "info");
 			} else {
 				const targetId = ROLE_MODELS[forcedMode];
 				ctx.ui.setStatus("friday-router", `🧠 [LOCK:${forcedMode.toUpperCase()}] ${targetId.split("/").pop()}`);

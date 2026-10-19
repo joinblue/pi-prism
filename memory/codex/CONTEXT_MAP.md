@@ -1,6 +1,6 @@
 # 🗺️ PotoTypeV0 × Friday Context Registry & Topology Map (CONTEXT_MAP.md)
 
-> **自動生成時間**: `2026-10-19T13:53:27Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `8`
+> **自動生成時間**: `2026-10-19T15:55:55Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `8`
 > **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入本索引之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。
 
 ## 1. 領域分層索引表 (Domain Layer Registry 000–900)
@@ -28,7 +28,7 @@
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
-| `300.LEDGER.v1` | `MEM-2026-0008` | `spec` | `verified` | `nvidia/nemotron-3-super-120b-a12b` ➔ `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | 專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。 | [LEDGER.md](../LEDGER.md) |
+| `300.LEDGER.v1` | `MEM-2026-0008` | `spec` | `verified` | `nvidia/nemotron-3-super-120b-a12b` ➔ `deepseek-ai/deepseek-v4.1-flash` | 專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。 | [LEDGER.md](../LEDGER.md) |
 
 ### 🧩 `500` — 500 動態模型路由與子代理編排 (Model Routing & Subagents)
 

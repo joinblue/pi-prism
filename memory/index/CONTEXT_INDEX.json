@@ -2,7 +2,7 @@
   "schema_version": "2.0.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-19T13:53:27Z",
+  "generated_at": "2026-10-19T15:55:55Z",
   "total_nodes": 8,
   "domain_registry": {
     "000": {
@@ -181,15 +181,17 @@
           ],
           "summary_1line": "專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。",
           "path": "memory/LEDGER.md",
-          "sha256_16": "9852582138902f74",
+          "sha256_16": "c2d138e3e93fcb08",
           "author_model": "nvidia/nemotron-3-super-120b-a12b",
-          "reviewer_model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+          "reviewer_model": "deepseek-ai/deepseek-v4.1-flash",
           "depends_on": [
             "000.SOUL.v1",
             "200.OPT-ROADMAP.v1"
           ],
           "affected_paths": [
-            "memory/specs/200_OPTIMIZATION_ROADMAP.md"
+            "memory/specs/200_OPTIMIZATION_ROADMAP.md",
+            ".Friday/extensions/workspace-guard.ts",
+            ".Friday/extensions/model-router.ts"
           ]
         }
       ]

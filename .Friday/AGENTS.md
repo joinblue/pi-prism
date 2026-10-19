@@ -24,24 +24,25 @@
 2. **認知誠實與跨模型防諂媚機制 (Epistemic Integrity & Anti-Sycophancy)**：
    - 架構分析或記憶節點中的關鍵陳述標註 `[FACT]`（有實證/行號/輸出）、`[INFERRED]`（邏輯推導）、`[HYPOTHESIS]`（待驗證假設）或 `[UNVERIFIED]`（未查證）。
    - **禁止同模型自審自核 (AS-01)**：當新增或修改 `memory/` 下的記憶節點並標記為 `verified` 時，`author.model` 與 `reviewer.model` 必須為不同模型家族，且需通過 `python3 schemas/schema_validator.py --run-oracle`。
-3. **工作區邊界與大腦自體防護鎖 (`workspace-guard.ts`)**：
+3. **工作區邊界、大腦自體防護與防幽靈文件鎖 (`workspace-guard.ts` & `epistemic-gate.ts`)**：
    - 預設所有檔案讀寫 (`read`, `write`, `edit`, `grep`, `find`, `ls`, `bash`) 嚴格鎖定於目前開啟的專案目錄 (`ctx.cwd`)。
    - 嚴禁存取 `auth.json`、`.env` (`SEC-CRED`)、禁止自動竄改 `.Friday/` 大腦與 `schemas/` 驗證核心 (`SEC-BRAIN` / `SEC-SCHEMA`)、攔截本機絕對路徑寫入 (`SEC-PORTABILITY`)，並攔截 `SEC-CMD-V1` 危險指令。
-4. **固定主腦 (Orchestrator-First) 與零冷啟動專長派工 (`dispatch_specialist` & `subagent`)**：
-   - 主對話預設搭載 `pi-router/auto`，固定由 `< 1s TTFT` 旗艦主腦 `nvidia/nemotron-3-super-120b-a12b` 負責全局推理與維持 KV Cache。
-   - 主腦可隨時呼叫零冷啟動工具 **`dispatch_specialist`** 或多代理 **`subagent`** 調度 5 大極速專家：
-     - `scout` (`z-ai/glm-5.3-flash`, `0.60s TTFT`, 1M Context)
-     - `architect` (`nvidia/nemotron-3-super-120b-a12b`, `0.28s TTFT`)
-     - `challenger` (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, `0.39s TTFT`)
-     - `worker` / `code` (`poolside/laguna-xs-2.1`, `0.28s TTFT`)
-     - `auditor` / `audit` (`z-ai/glm-5.3-flash`, `0.60s TTFT`)
+   - **防幽靈文件鎖 (`SEC-DOC-GOVERNANCE`)**：嚴禁在 `memory/` 目錄以外建立未納管之 `.md` 計畫書或草稿（除根目錄 `README.md`、`AGENTS.md` 外），所有架構規格與紀錄必須建立於 `memory/{codex,specs,decisions,audits}/` 並具備合規 YAML 標頭，寫入後由系統自動觸發 `schema_validator.py` 與索引重編。
+4. **固定主腦防奪舍 (Orchestrator-First Anti-Hijack) 與雙軌省流派工 (`dispatch_specialist` & `subagent`)**：
+   - 主對話預設搭載 `pi-router/auto`，**100% 鎖定主腦 `ROLE_MODELS.orchestrator`**（如 `google-vertex/gemini-4-argon` 或 `nvidia/nemotron-3-super-120b-a12b`），嚴禁在主對話直接 `read` 圖片（避免 Base64 污染主腦 Context 與重置 KV Cache），僅背景壓縮 (`direct`) 自動轉交 `scout`。
+   - **通道 A：零冷啟動專家直調 (`dispatch_specialist`，內建免費模型 Fallback 鏈與 `filePaths` 多檔直讀)**：
+     - **視覺解析 (`vision`)**：遇任何圖片分析需求，必須呼叫 `dispatch_specialist(specialist="vision", imagePath="...", task="...")` 由免費視覺專家解析並回傳純文字報告。
+     - **多檔檢索/跨檔對比 (`scout` / `challenger`)**：可傳入 `filePaths=["path/a", "path/b"]` 讓免費專家在背景直接讀取檔案並回傳摘要或對抗審查意見（消耗主腦 0 讀檔 Token）。
+   - **通道 C：獨立沙盒代理委派 (`subagent`)**：
+     - 凡涉及多檔案修改、程式碼重構與跑測試，優先委派 `subagent(agent="worker"|"scout"|"auditor")` 或 `chain` 模式（預設極速鏈：`scout -> worker -> auditor`；深度對抗鏈：`scout -> architect -> challenger -> worker -> auditor`）。
+   - **雙調度策略模式 (`strategyMode`)**：支援 `apex-commander`（預設，啟用 `tool_call` 圖片與多檔 `read` 強制省流閘門）與 `hybrid-synergy`（雙腦協同對抗模式，可由 `/mode strategy` 切換）。
 
 ## 3. 專案目錄與內建專屬指令
 
-- **核心目錄**：`.Friday/`（大腦核心、技能書 `.Friday/skills/` 與子代理 `.Friday/agents/*.md`）、`schemas/`（標頭與拓撲驗證器 `schema_validator.py`）、`scripts/`（索引編譯 `auto_update_map.py` 與五合一測試 `test_friday_architecture.py`）、`memory/`（活躍台帳 `LEDGER.md`、核心規範 `codex/`、架構規格 `specs/`、驗收紀錄 `audits/`）。
+- **核心目錄**：`.Friday/`（大腦核心、技能書 `.Friday/skills/` 與子代理 `.Friday/agents/*.md`）、`schemas/`（標頭與拓撲驗證器 `schema_validator.py`）、`scripts/`（索引編譯 `auto_update_map.py` 與架構測試 `test_friday_architecture.py`）、`memory/`（活躍台帳 `LEDGER.md`、核心規範 `codex/`、架構規格 `specs/`、決策 `decisions/`、驗收紀錄 `audits/`）。
 - **專屬指令**：
-  - `/mode [auto|orchestrator|scout|architect|challenger|code|audit|vision]`：檢視或切換 Friday 模型路由模式。
+  - `/mode`：互動式管理各角色綁定模型 (`set`)、調度策略 (`strategy <apex-commander|hybrid-synergy>`)、Provider 憑證 (`key` / `vertex`) 與鎖定模式。
   - `/guard [reset]`：檢視當前工作區鎖定邊界 (`ctx.cwd`) 與臨時授權目錄，或重設授權。
   - `/validate`：執行獨立驗證器 (`schema_validator.py`) 並重編 `CONTEXT_INDEX.json` 與 `CONTEXT_MAP.md`。
   - `/dream [deep]`：啟動三階段睡眠記憶鞏固流水線（NREM 篩選 ➔ REM 提純台帳與決策 ➔ 神諭驗收）。
-  - `/team <任務描述>`：啟動 `scout -> architect -> challenger -> worker -> auditor` 五階段跨模型協作流水線。
+  - `/team <任務描述>`：啟動跨模型子代理協作流水線（預設極速鏈 `scout -> worker -> auditor` 或完整深度對抗鏈）。

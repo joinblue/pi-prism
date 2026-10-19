@@ -51,6 +51,65 @@ export default function (pi: ExtensionAPI) {
 		};
 	});
 
+	// M7: Write-Time Schema & Index Enforcement whenever `write` or `edit` modifies `memory/**/*.md`
+	pi.on("tool_result", async (event, ctx) => {
+		if (event.toolName !== "write" && event.toolName !== "edit") return undefined;
+		if (event.isError) return undefined;
+
+		const input = (event.input ?? {}) as Record<string, unknown>;
+		const rawPath = String(input.path ?? input.file_path ?? "").trim();
+		if (!rawPath) return undefined;
+
+		const absPath = path.isAbsolute(rawPath) ? path.resolve(rawPath) : path.resolve(ctx.cwd, rawPath);
+		const relToCwd = path.relative(ctx.cwd, absPath).replace(/\\/g, "/");
+		if (!relToCwd.startsWith("memory/") || !relToCwd.toLowerCase().endsWith(".md")) return undefined;
+		if (relToCwd === "memory/index/CONTEXT_MAP.md") return undefined;
+
+		const validatorPath = path.join(ctx.cwd, "schemas", "schema_validator.py");
+		const mapScriptPath = path.join(ctx.cwd, "scripts", "auto_update_map.py");
+		if (!fs.existsSync(validatorPath) || !fs.existsSync(absPath)) return undefined;
+
+		try {
+			const valOut = execFileSync("python3", [validatorPath, "--file", absPath], {
+				cwd: ctx.cwd,
+				encoding: "utf-8",
+				timeout: 15_000,
+			}).trim();
+			let mapOut = "";
+			if (fs.existsSync(mapScriptPath)) {
+				mapOut = execFileSync("python3", [mapScriptPath], {
+					cwd: ctx.cwd,
+					encoding: "utf-8",
+					timeout: 15_000,
+				}).trim();
+			}
+			const existingContent = Array.isArray(event.content) ? event.content : [];
+			return {
+				content: [
+					...existingContent,
+					{
+						type: "text",
+						text: `\n✅ [Epistemic Write-Time Gate] ${valOut}${mapOut ? `\n${mapOut}` : ""}`,
+					},
+				],
+			};
+		} catch (err: any) {
+			const stdout = err?.stdout ? String(err.stdout).trim() : "";
+			const stderr = err?.stderr ? String(err.stderr).trim() : String(err);
+			const existingContent = Array.isArray(event.content) ? event.content : [];
+			return {
+				content: [
+					...existingContent,
+					{
+						type: "text",
+						text: `\n❌ [Epistemic Write-Time Gate — YAML Schema Violation in ${relToCwd}]\n${stdout}\n${stderr}\n👉 請立即根據上述錯誤修正該記憶節點之 YAML Frontmatter 標頭！`,
+					},
+				],
+				isError: true,
+			};
+		}
+	});
+
 	pi.registerCommand("validate", {
 		description: "執行 Friday 獨立驗證器 (schema_validator.py) 並更新 Context 依賴拓撲圖 (auto_update_map.py)",
 		handler: async (_args, ctx) => {
