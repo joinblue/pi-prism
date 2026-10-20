@@ -1,9 +1,10 @@
 {
-  "schema_version": "2.0.0",
+  "schema_version": "2.1.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-19T15:55:55Z",
+  "generated_at": "2026-10-19T16:14:36Z",
   "total_nodes": 8,
+  "healed_links": [],
   "domain_registry": {
     "000": {
       "title": "000 核心憲法與認知規範 (Core Constitution & Epistemic Rules)",
@@ -181,7 +182,7 @@
           ],
           "summary_1line": "專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。",
           "path": "memory/LEDGER.md",
-          "sha256_16": "c2d138e3e93fcb08",
+          "sha256_16": "8fd9a2b79ef61a12",
           "author_model": "nvidia/nemotron-3-super-120b-a12b",
           "reviewer_model": "deepseek-ai/deepseek-v4.1-flash",
           "depends_on": [
@@ -310,7 +311,7 @@
           ],
           "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
           "path": "memory/specs/700_HARNESS_BLUEPRINT.md",
-          "sha256_16": "d337f31549f04ee9",
+          "sha256_16": "af5f5132cd4507fc",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -430,6 +431,68 @@
       "from": "MEM-2026-0005",
       "to": "MEM-2026-0003",
       "relation": "depends_on"
+    }
+  ],
+  "code_dependency_edges": [
+    {
+      "from": "scripts/auto_update_map.py",
+      "to": "schemas/schema_validator.py",
+      "type": "py_from_import"
+    },
+    {
+      "from": "scripts/test_friday_architecture.py",
+      "to": "scripts/auto_update_map.py",
+      "type": "py_from_import"
+    },
+    {
+      "from": ".Friday/extensions/epistemic-gate.ts",
+      "to": "@earendil-works/pi-coding-agent",
+      "type": "ts_sdk_import"
+    },
+    {
+      "from": ".Friday/extensions/model-router.ts",
+      "to": "@earendil-works/pi-ai",
+      "type": "ts_sdk_import"
+    },
+    {
+      "from": ".Friday/extensions/model-router.ts",
+      "to": "@earendil-works/pi-coding-agent",
+      "type": "ts_sdk_import"
+    },
+    {
+      "from": ".Friday/extensions/subagent/agents.ts",
+      "to": "@earendil-works/pi-coding-agent",
+      "type": "ts_sdk_import"
+    },
+    {
+      "from": ".Friday/extensions/subagent/index.ts",
+      "to": "@earendil-works/pi-agent-core",
+      "type": "ts_sdk_import"
+    },
+    {
+      "from": ".Friday/extensions/subagent/index.ts",
+      "to": "@earendil-works/pi-ai",
+      "type": "ts_sdk_import"
+    },
+    {
+      "from": ".Friday/extensions/subagent/index.ts",
+      "to": "@earendil-works/pi-coding-agent",
+      "type": "ts_sdk_import"
+    },
+    {
+      "from": ".Friday/extensions/subagent/index.ts",
+      "to": "@earendil-works/pi-tui",
+      "type": "ts_sdk_import"
+    },
+    {
+      "from": ".Friday/extensions/subagent/index.ts",
+      "to": ".Friday/extensions/subagent/agents.ts",
+      "type": "ts_local_import"
+    },
+    {
+      "from": ".Friday/extensions/workspace-guard.ts",
+      "to": "@earendil-works/pi-coding-agent",
+      "type": "ts_sdk_import"
     }
   ]
 }

@@ -1,7 +1,7 @@
 # 🗺️ PotoTypeV0 × Friday Context Registry & Topology Map (CONTEXT_MAP.md)
 
-> **自動生成時間**: `2026-10-19T15:55:55Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `8`
-> **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入本索引之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。
+> **自動生成時間**: `2026-10-19T16:14:36Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `8`
+> **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入活躍節點 (`verified`/`draft`) 之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。
 
 ## 1. 領域分層索引表 (Domain Layer Registry 000–900)
 
@@ -72,7 +72,24 @@ flowchart TD
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0003["MEM-2026-0003"]
 ```
 
-## 3. 專案治理目錄結構摘要
+## 3. 源碼 AST Import 依賴拓撲表 (Python & TypeScript Code Dependency Graph)
+
+| 來源模組 (`from`) | 目標依賴 (`to`) | 依賴類型 (`type`) |
+| :--- | :--- | :---: |
+| `scripts/auto_update_map.py` | `schemas/schema_validator.py` | `py_from_import` |
+| `scripts/test_friday_architecture.py` | `scripts/auto_update_map.py` | `py_from_import` |
+| `.Friday/extensions/epistemic-gate.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
+| `.Friday/extensions/model-router.ts` | `@earendil-works/pi-ai` | `ts_sdk_import` |
+| `.Friday/extensions/model-router.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
+| `.Friday/extensions/subagent/agents.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
+| `.Friday/extensions/subagent/index.ts` | `@earendil-works/pi-agent-core` | `ts_sdk_import` |
+| `.Friday/extensions/subagent/index.ts` | `@earendil-works/pi-ai` | `ts_sdk_import` |
+| `.Friday/extensions/subagent/index.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
+| `.Friday/extensions/subagent/index.ts` | `@earendil-works/pi-tui` | `ts_sdk_import` |
+| `.Friday/extensions/subagent/index.ts` | `.Friday/extensions/subagent/agents.ts` | `ts_local_import` |
+| `.Friday/extensions/workspace-guard.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
+
+## 4. 專案治理目錄結構摘要
 
 - `.Friday/` — 專案內嵌可攜式 Agentic Harness 大腦（含模型路由、安全護欄、漸進式揭露與 5 角色子代理）
 - `schemas/` — 記憶節點標頭 (`artifact_header.schema.json`)、Context 拓撲節點 (`context_node.schema.json`) 與防諂媚驗證器 (`schema_validator.py`)

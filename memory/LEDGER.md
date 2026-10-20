@@ -64,7 +64,7 @@ topology:
 | **WO-2026-S1** | Stage 1：`<1s TTFT` 固定主腦 + `dispatch_specialist` | ✅ 已完成 (`fadbd17`) | `architect` / `worker` | `test_friday_architecture.py` (Suite 3 & 4) |
 | **WO-2026-S2** | Stage 2：繁中強制、三段式通報、`LEDGER.md` 與 `/mode` 升級 | ✅ 已完成 (`772ef1d`) | `architect` / `worker` | `schema_validator.py` + `test_friday_architecture.py` (Suite 6) |
 | **WO-2026-S3** | Stage 3：`workspace-guard.ts` 引號感知、`SEC-PORTABILITY` 與處方籤 | ✅ 已完成 (`2c398be`) | `worker` / `challenger` | `test_friday_architecture.py` (Suite 3 & 7) |
-| **WO-2026-R1** | Router & Governance (`M1`~`M7`)：防奪舍、Fallback 鏈、`filePaths` 直讀、省流閘門、雙策略與 `SEC-DOC-GOVERNANCE` | ✅ 已完成 | `architect` / `worker` | `test_friday_architecture.py` (Suite 8) |
-| **WO-2026-S4** | Stage 4：`schema_validator.py` 散文預算、`AS-05`/`AS-06` 與骨架 | ⏳ 待執行 | `worker` / `auditor` | Stage 4 Validator Oracle Tests |
-| **WO-2026-S5** | Stage 5：`auto_update_map.py` 死鏈/AST + `epistemic-gate.ts` 警報 | ⏳ 待執行 | `worker` / `auditor` | Stage 5 Hook & Compiler Tests |
+| **WO-2026-R1** | Router & Governance (`M1`~`M7`)：防奪舍、Fallback 鏈、`filePaths` 直讀、省流閘門、雙策略與 `SEC-DOC-GOVERNANCE` | ✅ 已完成 (`c848dc5`) | `architect` / `worker` | `test_friday_architecture.py` (Suite 8) |
+| **WO-2026-S4** | Stage 4：`schema_validator.py` 散文預算、`AS-05`/`AS-06` 與骨架 | ✅ 已完成 | `worker` / `auditor` | `test_friday_architecture.py` (Suite 9) |
+| **WO-2026-S5** | Stage 5：`auto_update_map.py` 死鏈/AST + `epistemic-gate.ts` 警報 | ✅ 已完成 | `worker` / `auditor` | `test_friday_architecture.py` (Suite 10) |
 | **WO-2026-S6** | Stage 6：`/dream` 三階段睡眠記憶鞏固 + 退出微夢境 | ⏳ 待執行 | `architect` / `auditor` | Stage 6 Dream Pipeline E2E Tests |

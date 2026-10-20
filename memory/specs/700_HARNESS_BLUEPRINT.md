@@ -114,7 +114,7 @@ flowchart TB
 
 | 建構項目 (檔案路徑) | 類別 | 核心功能說明 |
 | :--- | :---: | :--- |
-| [`AGENTS.md`](../../AGENTS.md) | 專案規範 | 說明專案目錄結構，並規定唯有修改 `memory/` 下之架構記憶節點時才需執行驗證。 |
+| [`AGENTS.md`](../../.Friday/AGENTS.md) | 專案規範 | 說明專案目錄結構，並規定唯有修改 `memory/` 下之架構記憶節點時才需執行驗證。 |
 | [`schemas/artifact_header.schema.json`](../../schemas/artifact_header.schema.json) | 治理標頭契約 | 規範記憶節點的 `node_id`、`artifact_type`、`status`、`author`、`reviewer`、`epistemic_profile` 與 `verification_oracle`。 |
 | [`schemas/context_node.schema.json`](../../schemas/context_node.schema.json) | 拓撲索引契約 | 規範 `context_index`（領域分層碼 `000`–`900`、定位鍵 `node_key`、單行摘要 `summary_1line`）與 `topology`（`depends_on`、`affected_paths`）。 |
 | [`schemas/schema_validator.py`](../../schemas/schema_validator.py) | 外部驗證神諭 (Oracle) | 獨立於 LLM 之外的 Python 驗證程式，強制執行防諂媚與拓撲完整性檢查（`AS-01` ~ `AS-06`）。 |

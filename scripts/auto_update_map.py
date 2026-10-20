@@ -3,14 +3,19 @@
 Friday Context Index & Topology Map Compiler (auto_update_map.py)
 =================================================================
 Scans all governed memory nodes in `memory/`,
-compiles `memory/index/CONTEXT_INDEX.json` (Progressive Disclosure Index),
-and renders `memory/codex/CONTEXT_MAP.md` for Agentic Context Engineering.
+1. Automatically heals broken relative Markdown links (`heal_dead_links`),
+2. Scans Python (`ast`) and TypeScript (`import`) code dependencies (`scan_code_dependencies`),
+3. Compiles `memory/index/CONTEXT_INDEX.json` (Progressive Disclosure Index),
+4. Renders `memory/codex/CONTEXT_MAP.md` for Agentic Context Engineering.
 """
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
+import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,9 +37,154 @@ DOMAIN_LAYERS = {
     "900": "900 歷史封存節點 (Archived & Superseded Nodes)",
 }
 
+MD_LINK_PATTERN = re.compile(r"(\[[^\]]+\]\()([^)\s]+)(\))")
+TS_IMPORT_PATTERN = re.compile(r"""(?m)^\s*import\s+(?:type\s+)?(?:[^"']+from\s+)?["']([^"']+)["']""")
+
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+
+
+def heal_dead_links(project_root: Path, md_files: List[Path]) -> List[Dict[str, str]]:
+    """
+    Stage 5: Scans Markdown files in `memory/` for broken relative links `[label](rel/path.md)`.
+    If a target file was moved within the workspace, automatically rewrites the link in place.
+    """
+    healed_records: List[Dict[str, str]] = []
+
+    # Build lookup table of basename -> list of Paths inside project_root
+    basename_map: Dict[str, List[Path]] = {}
+    for root_sub in ("memory", ".Friday", "schemas", "scripts"):
+        sub_dir = project_root / root_sub
+        if not sub_dir.exists():
+            continue
+        for p in sub_dir.rglob("*"):
+            if p.is_file():
+                basename_map.setdefault(p.name, []).append(p)
+
+    for md_path in md_files:
+        raw_text = md_path.read_text(encoding="utf-8")
+        lines = raw_text.splitlines(keepends=True)
+        in_fence = False
+        modified = False
+        new_lines: List[str] = []
+
+        for line in lines:
+            if line.strip().startswith("```"):
+                in_fence = not in_fence
+                new_lines.append(line)
+                continue
+            if in_fence:
+                new_lines.append(line)
+                continue
+
+            def _replace_link(match: re.Match[str]) -> str:
+                nonlocal modified
+                prefix, raw_target, suffix = match.group(1), match.group(2), match.group(3)
+                if raw_target.startswith(("http://", "https://", "mailto:", "#", "file://")):
+                    return match.group(0)
+                target_no_anchor = raw_target.split("#", 1)[0]
+                anchor = ("#" + raw_target.split("#", 1)[1]) if "#" in raw_target else ""
+                if not target_no_anchor:
+                    return match.group(0)
+
+                resolved = (md_path.parent / target_no_anchor).resolve()
+                if resolved.exists():
+                    return match.group(0)
+
+                base_name = Path(target_no_anchor).name
+                candidates = basename_map.get(base_name, [])
+                if len(candidates) == 1:
+                    found_path = candidates[0]
+                    healed_rel = os.path.relpath(found_path, md_path.parent).replace("\\", "/") + anchor
+                    modified = True
+                    healed_records.append(
+                        {
+                            "file": str(md_path.relative_to(project_root)),
+                            "old_target": raw_target,
+                            "new_target": healed_rel,
+                        }
+                    )
+                    return f"{prefix}{healed_rel}{suffix}"
+                return match.group(0)
+
+            new_lines.append(MD_LINK_PATTERN.sub(_replace_link, line))
+
+        if modified:
+            md_path.write_text("".join(new_lines), encoding="utf-8")
+
+    return healed_records
+
+
+def scan_code_dependencies(project_root: Path) -> List[Dict[str, str]]:
+    """
+    Stage 5: Parses Python files via `ast.parse` and TypeScript files via import regex
+    to build a machine-readable code dependency graph across `schemas/`, `scripts/`, and `.Friday/extensions/`.
+    """
+    code_edges: List[Dict[str, str]] = []
+    py_module_map: Dict[str, str] = {}
+
+    for sub in ("schemas", "scripts"):
+        d = project_root / sub
+        if d.exists():
+            for py_file in sorted(d.rglob("*.py")):
+                py_module_map[py_file.stem] = str(py_file.relative_to(project_root))
+
+    for sub in ("schemas", "scripts"):
+        d = project_root / sub
+        if not d.exists():
+            continue
+        for py_file in sorted(d.rglob("*.py")):
+            src_rel = str(py_file.relative_to(project_root))
+            try:
+                tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=src_rel)
+            except Exception:
+                continue
+            seen_targets = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top_mod = alias.name.split(".")[0]
+                        if top_mod in py_module_map and py_module_map[top_mod] != src_rel:
+                            target = py_module_map[top_mod]
+                            if target not in seen_targets:
+                                seen_targets.add(target)
+                                code_edges.append({"from": src_rel, "to": target, "type": "py_import"})
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    top_mod = node.module.split(".")[0]
+                    if top_mod in py_module_map and py_module_map[top_mod] != src_rel:
+                        target = py_module_map[top_mod]
+                        if target not in seen_targets:
+                            seen_targets.add(target)
+                            code_edges.append({"from": src_rel, "to": target, "type": "py_from_import"})
+
+    ext_dir = project_root / ".Friday" / "extensions"
+    if ext_dir.exists():
+        for ts_file in sorted(ext_dir.rglob("*.ts")):
+            src_rel = str(ts_file.relative_to(project_root))
+            raw_ts = ts_file.read_text(encoding="utf-8")
+            seen_targets = set()
+            for m in TS_IMPORT_PATTERN.finditer(raw_ts):
+                spec = m.group(1)
+                if spec.startswith("."):
+                    candidate = (ts_file.parent / spec).resolve()
+                    if candidate.suffix in (".js", ".mjs"):
+                        ts_cand = candidate.with_suffix(".ts")
+                        if ts_cand.exists():
+                            candidate = ts_cand
+                    elif not candidate.suffix and candidate.with_suffix(".ts").exists():
+                        candidate = candidate.with_suffix(".ts")
+                    if candidate.exists() and candidate.is_relative_to(project_root):
+                        target = str(candidate.relative_to(project_root))
+                        if target not in seen_targets:
+                            seen_targets.add(target)
+                            code_edges.append({"from": src_rel, "to": target, "type": "ts_local_import"})
+                elif spec.startswith("@earendil-works/") or spec.startswith("@sinclair/"):
+                    if spec not in seen_targets:
+                        seen_targets.add(spec)
+                        code_edges.append({"from": src_rel, "to": spec, "type": "ts_sdk_import"})
+
+    return code_edges
 
 
 def build_context_index(project_root: Path) -> Dict[str, Any]:
@@ -43,6 +193,9 @@ def build_context_index(project_root: Path) -> Dict[str, Any]:
         p for p in memory_dir.rglob("*.md")
         if p.name != "CONTEXT_MAP.md"
     )
+
+    healed_links = heal_dead_links(project_root, md_files)
+    code_dependency_edges = scan_code_dependencies(project_root)
 
     entries: List[Dict[str, Any]] = []
     by_domain: Dict[str, List[Dict[str, Any]]] = {k: [] for k in DOMAIN_LAYERS}
@@ -96,11 +249,12 @@ def build_context_index(project_root: Path) -> Dict[str, Any]:
             pass
 
     context_index = {
-        "schema_version": "2.0.0",
+        "schema_version": "2.1.0",
         "project": project_root.name,
         "harness": "Friday",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "total_nodes": len(entries),
+        "healed_links": healed_links,
         "domain_registry": {
             code: {
                 "title": title,
@@ -110,6 +264,7 @@ def build_context_index(project_root: Path) -> Dict[str, Any]:
             for code, title in DOMAIN_LAYERS.items()
         },
         "causal_topology_edges": edges,
+        "code_dependency_edges": code_dependency_edges,
     }
     return context_index
 
@@ -119,7 +274,7 @@ def render_context_map_md(project_root: Path, index: Dict[str, Any]) -> str:
         "# 🗺️ PotoTypeV0 × Friday Context Registry & Topology Map (CONTEXT_MAP.md)",
         "",
         f"> **自動生成時間**: `{index['generated_at']}` | **Agentic Harness**: `{index['harness']}` | **記憶節點總數**: `{index['total_nodes']}`",
-        "> **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入本索引之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。",
+        "> **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入活躍節點 (`verified`/`draft`) 之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。",
         "",
         "## 1. 領域分層索引表 (Domain Layer Registry 000–900)",
         "",
@@ -161,7 +316,16 @@ def render_context_map_md(project_root: Path, index: Dict[str, Any]) -> str:
     lines.extend([
         "```",
         "",
-        "## 3. 專案治理目錄結構摘要",
+        "## 3. 源碼 AST Import 依賴拓撲表 (Python & TypeScript Code Dependency Graph)",
+        "",
+        "| 來源模組 (`from`) | 目標依賴 (`to`) | 依賴類型 (`type`) |",
+        "| :--- | :--- | :---: |",
+    ])
+    for cedge in index.get("code_dependency_edges", []):
+        lines.append(f"| `{cedge['from']}` | `{cedge['to']}` | `{cedge['type']}` |")
+    lines.extend([
+        "",
+        "## 4. 專案治理目錄結構摘要",
         "",
         "- `.Friday/` — 專案內嵌可攜式 Agentic Harness 大腦（含模型路由、安全護欄、漸進式揭露與 5 角色子代理）",
         "- `schemas/` — 記憶節點標頭 (`artifact_header.schema.json`)、Context 拓撲節點 (`context_node.schema.json`) 與防諂媚驗證器 (`schema_validator.py`)",
@@ -187,7 +351,10 @@ def main() -> int:
     map_path.parent.mkdir(parents=True, exist_ok=True)
     map_path.write_text(render_context_map_md(project_root, index), encoding="utf-8")
 
-    print(f"✅ Compiled CONTEXT_INDEX.json ({index['total_nodes']} nodes) -> {index_path}")
+    healed = index.get("healed_links", [])
+    if healed:
+        print(f"🩹 Auto-healed {len(healed)} broken relative Markdown link(s): {healed}")
+    print(f"✅ Compiled CONTEXT_INDEX.json ({index['total_nodes']} nodes, {len(index.get('code_dependency_edges', []))} code edges) -> {index_path}")
     print(f"✅ Rendered CONTEXT_MAP.md -> {map_path}")
     return 0
 
