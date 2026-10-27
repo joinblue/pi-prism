@@ -1,6 +1,6 @@
 # 🗺️ PotoTypeV0 × Friday Context Registry & Topology Map (CONTEXT_MAP.md)
 
-> **自動生成時間**: `2026-10-19T16:14:36Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `8`
+> **自動生成時間**: `2026-10-27T15:26:21Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `11`
 > **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入活躍節點 (`verified`/`draft`) 之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。
 
 ## 1. 領域分層索引表 (Domain Layer Registry 000–900)
@@ -28,19 +28,22 @@
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
-| `300.LEDGER.v1` | `MEM-2026-0008` | `spec` | `verified` | `nvidia/nemotron-3-super-120b-a12b` ➔ `deepseek-ai/deepseek-v4.1-flash` | 專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。 | [LEDGER.md](../LEDGER.md) |
+| `300.LEDGER.v1` | `MEM-2026-0008` | `spec` | `verified` | `google-vertex/gemini-4-argon` ➔ `deepseek-ai/deepseek-v4.1-flash` | 專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。 | [LEDGER.md](../LEDGER.md) |
 
 ### 🧩 `500` — 500 動態模型路由與子代理編排 (Model Routing & Subagents)
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
 | `500.MODEL-APIKEY-SPEC.v1` | `MEM-2026-0006` | `spec` | `verified` | `deepseek-ai/deepseek-v4.1-flash` ➔ `z-ai/glm-5.3` | Friday 模型分配之 4 大設定位置（models.json、settings.json、model-router.ts、agents/*.md）與多組 API Key 分流配置規格。 | [500_MODEL_APIKEY_GUIDE.md](../specs/500_MODEL_APIKEY_GUIDE.md) |
+| `500.ROUTER-V2-MULTITURN.v1` | `MEM-2026-0010` | `spec` | `verified` | `google-vertex/gemini-4-argon` ➔ `nvidia/nemotron-3-ultra-550b-a55b` | Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。 | [610_ROUTER_V2_REDESIGN.md](../specs/610_ROUTER_V2_REDESIGN.md) |
+| `500.PULSE-SCHEDULER.v1` | `MEM-2026-0011` | `spec` | `draft` | `google-vertex/gemini-4-argon` ➔ `deepseek-ai/deepseek-v4.1-flash` | Friday Pulse 智慧背景排程初步藍圖：定義定時/事件/動態心跳三模態觸發、免費 Scout 前哨過濾與收件匣隔離簽核機制。 | [620_FRIDAY_PULSE_SCHEDULER_SPEC.md](../specs/620_FRIDAY_PULSE_SCHEDULER_SPEC.md) |
 
 ### 🧩 `600` — 600 驗證斷言、測試與安全稽核 (Verification Oracles & Audits)
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
 | `600.AUDIT-001.v1` | `MEM-2026-0004` | `audit` | `verified` | `poolside/laguna-xs-2.1` ➔ `z-ai/glm-5.3-flash` | PotoTypeV0 專案與 Friday Agentic Harness 初始化驗收紀錄：記錄四大核心模組之驗收基準與依賴拓撲。 | [MEM-2026-0004_HARNESS_INIT_AUDIT.md](../audits/MEM-2026-0004_HARNESS_INIT_AUDIT.md) |
+| `600.AUDIT-002.v1` | `MEM-2026-0009` | `audit` | `deprecated` | `google-vertex/gemini-4-argon` ➔ `nvidia/nemotron-3-ultra-550b-a55b` | WO-2026-R1 (M1~M7) 與 Stage 4~5 壓力測試驗收報告：記錄已通過之防禦機制與待修復之 4 項執行期瓶頸。 | [MEM-2026-0009_ROUTER_STRESS_AUDIT.md](../audits/MEM-2026-0009_ROUTER_STRESS_AUDIT.md) |
 
 ### 🧩 `700` — 700 可攜式部署與容器封裝 (Portable Brain & Containerization)
 
@@ -57,6 +60,7 @@ flowchart TD
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0003["MEM-2026-0003"]
+    MEM_2026_0009["MEM-2026-0009"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0002["MEM-2026-0002"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0003["MEM-2026-0003"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0003["MEM-2026-0003"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
@@ -67,9 +71,19 @@ flowchart TD
     MEM_2026_0007["MEM-2026-0007"] -->|"depends_on"| MEM_2026_0006["MEM-2026-0006"]
     MEM_2026_0006["MEM-2026-0006"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
     MEM_2026_0006["MEM-2026-0006"] -->|"depends_on"| MEM_2026_0003["MEM-2026-0003"]
+    MEM_2026_0010["MEM-2026-0010"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
+    MEM_2026_0010["MEM-2026-0010"] -->|"depends_on"| MEM_2026_0007["MEM-2026-0007"]
+    MEM_2026_0010["MEM-2026-0010"] -->|"depends_on"| MEM_2026_0006["MEM-2026-0006"]
+    MEM_2026_0010["MEM-2026-0010"] -->|"depends_on"| MEM_2026_0009["MEM-2026-0009"]
+    MEM_2026_0010["MEM-2026-0010"] -->|"depends_on"| MEM_2026_0005["MEM-2026-0005"]
+    MEM_2026_0011["MEM-2026-0011"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
+    MEM_2026_0011["MEM-2026-0011"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
+    MEM_2026_0011["MEM-2026-0011"] -->|"depends_on"| MEM_2026_0007["MEM-2026-0007"]
+    MEM_2026_0011["MEM-2026-0011"] -->|"depends_on"| MEM_2026_0010["MEM-2026-0010"]
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0003["MEM-2026-0003"]
+    MEM_2026_0010["MEM-2026-0010"] -->|"supersedes"| MEM_2026_0009["MEM-2026-0009"]
 ```
 
 ## 3. 源碼 AST Import 依賴拓撲表 (Python & TypeScript Code Dependency Graph)
@@ -77,10 +91,14 @@ flowchart TD
 | 來源模組 (`from`) | 目標依賴 (`to`) | 依賴類型 (`type`) |
 | :--- | :--- | :---: |
 | `scripts/auto_update_map.py` | `schemas/schema_validator.py` | `py_from_import` |
+| `scripts/sync_doc_metadata.py` | `schemas/schema_validator.py` | `py_import` |
 | `scripts/test_friday_architecture.py` | `scripts/auto_update_map.py` | `py_from_import` |
+| `scripts/test_friday_architecture.py` | `scripts/sync_doc_metadata.py` | `py_from_import` |
+| `scripts/test_friday_architecture.py` | `schemas/schema_validator.py` | `py_import` |
 | `.Friday/extensions/epistemic-gate.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
 | `.Friday/extensions/model-router.ts` | `@earendil-works/pi-ai` | `ts_sdk_import` |
 | `.Friday/extensions/model-router.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
+| `.Friday/extensions/model-router.ts` | `.Friday/extensions/epistemic-gate.ts` | `ts_local_import` |
 | `.Friday/extensions/subagent/agents.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
 | `.Friday/extensions/subagent/index.ts` | `@earendil-works/pi-agent-core` | `ts_sdk_import` |
 | `.Friday/extensions/subagent/index.ts` | `@earendil-works/pi-ai` | `ts_sdk_import` |

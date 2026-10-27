@@ -1,10 +1,20 @@
 {
-  "schema_version": "2.1.0",
+  "schema_version": "2.2.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-19T16:14:36Z",
-  "total_nodes": 8,
+  "generated_at": "2026-10-27T15:26:21Z",
+  "total_nodes": 11,
   "healed_links": [],
+  "pending_topology_alignments": [
+    {
+      "source_node_id": "MEM-2026-0008",
+      "source_node_key": "300.LEDGER.v1",
+      "source_path": "memory/LEDGER.md",
+      "unlinked_targets": [
+        "MEM-2026-0004 (600.AUDIT-001.v1)"
+      ]
+    }
+  ],
   "domain_registry": {
     "000": {
       "title": "000 核心憲法與認知規範 (Core Constitution & Epistemic Rules)",
@@ -135,7 +145,7 @@
           ],
           "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
           "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md",
-          "sha256_16": "59e0e14895b542fb",
+          "sha256_16": "0705e74a238cc480",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -153,7 +163,8 @@
             ".Friday/extensions/workspace-guard.ts",
             ".Friday/extensions/epistemic-gate.ts",
             "schemas/schema_validator.py",
-            "scripts/auto_update_map.py"
+            "scripts/auto_update_map.py",
+            "scripts/sync_doc_metadata.py"
           ]
         }
       ]
@@ -182,8 +193,8 @@
           ],
           "summary_1line": "專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。",
           "path": "memory/LEDGER.md",
-          "sha256_16": "8fd9a2b79ef61a12",
-          "author_model": "nvidia/nemotron-3-super-120b-a12b",
+          "sha256_16": "7bd224983b8e80f5",
+          "author_model": "google-vertex/gemini-4-argon",
           "reviewer_model": "deepseek-ai/deepseek-v4.1-flash",
           "depends_on": [
             "000.SOUL.v1",
@@ -204,7 +215,7 @@
     },
     "500": {
       "title": "500 動態模型路由與子代理編排 (Model Routing & Subagents)",
-      "count": 1,
+      "count": 3,
       "items": [
         {
           "node_id": "MEM-2026-0006",
@@ -227,7 +238,7 @@
           ],
           "summary_1line": "Friday 模型分配之 4 大設定位置（models.json、settings.json、model-router.ts、agents/*.md）與多組 API Key 分流配置規格。",
           "path": "memory/specs/500_MODEL_APIKEY_GUIDE.md",
-          "sha256_16": "05d7a09791efe707",
+          "sha256_16": "cdc6421889085327",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -236,20 +247,109 @@
           ],
           "affected_paths": [
             ".Friday/models.json",
+            ".Friday/role-models.json",
             ".Friday/settings.json",
             ".Friday/extensions/model-router.ts",
+            "scripts/sync_doc_metadata.py",
             ".Friday/agents/scout.md",
             ".Friday/agents/architect.md",
             ".Friday/agents/challenger.md",
             ".Friday/agents/worker.md",
             ".Friday/agents/auditor.md"
           ]
+        },
+        {
+          "node_id": "MEM-2026-0010",
+          "artifact_type": "spec",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "critical",
+          "domain_code": "500",
+          "node_key": "500.ROUTER-V2-MULTITURN.v1",
+          "facet_tags": [
+            "Friday:Routing:MultiTurnSpecialist:Spec",
+            "Friday:Auth:MultiKeyStickyPool:Spec",
+            "PotoTypeV0:Governance:HookSpecSync:Spec"
+          ],
+          "keywords": [
+            "Multi-Turn dispatch_specialist",
+            "Sticky Key",
+            "Per-Loop Round-Robin",
+            "429 Backoff Wait",
+            "Token Offload Gate",
+            "Hook Spec Sync"
+          ],
+          "summary_1line": "Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。",
+          "path": "memory/specs/610_ROUTER_V2_REDESIGN.md",
+          "sha256_16": "9c758719dbde9d5b",
+          "author_model": "google-vertex/gemini-4-argon",
+          "reviewer_model": "nvidia/nemotron-3-ultra-550b-a55b",
+          "depends_on": [
+            "000.SOUL.v1",
+            "200.OPT-ROADMAP.v1",
+            "500.MODEL-APIKEY-SPEC.v1",
+            "600.AUDIT-002.v1",
+            "700.HARNESS-BLUEPRINT.v1"
+          ],
+          "affected_paths": [
+            ".Friday/models.json",
+            ".Friday/role-models.json",
+            ".Friday/AGENTS.md",
+            ".Friday/extensions/model-router.ts",
+            ".Friday/extensions/epistemic-gate.ts",
+            ".Friday/extensions/subagent/index.ts",
+            "schemas/schema_validator.py",
+            "scripts/sync_doc_metadata.py",
+            "scripts/test_friday_architecture.py",
+            "memory/audits/MEM-2026-0009_ROUTER_STRESS_AUDIT.md",
+            "memory/specs/200_OPTIMIZATION_ROADMAP.md",
+            "memory/specs/500_MODEL_APIKEY_GUIDE.md",
+            "memory/specs/700_HARNESS_BLUEPRINT.md"
+          ]
+        },
+        {
+          "node_id": "MEM-2026-0011",
+          "artifact_type": "spec",
+          "status": "draft",
+          "access_tier": "standard",
+          "priority": "high",
+          "domain_code": "500",
+          "node_key": "500.PULSE-SCHEDULER.v1",
+          "facet_tags": [
+            "Friday:Automation:PulseScheduler:Spec",
+            "Friday:Daemon:AdaptiveHeartbeat:Spec",
+            "PotoTypeV0:Workflow:InboxTriage:Spec"
+          ],
+          "keywords": [
+            "Friday Pulse",
+            "Adaptive Heartbeat",
+            "File Watcher",
+            "Zero-Cost Scout Triage",
+            "Inbox Approval",
+            "Worktree Isolation"
+          ],
+          "summary_1line": "Friday Pulse 智慧背景排程初步藍圖：定義定時/事件/動態心跳三模態觸發、免費 Scout 前哨過濾與收件匣隔離簽核機制。",
+          "path": "memory/specs/620_FRIDAY_PULSE_SCHEDULER_SPEC.md",
+          "sha256_16": "79d28a5f3bed1c33",
+          "author_model": "google-vertex/gemini-4-argon",
+          "reviewer_model": "deepseek-ai/deepseek-v4.1-flash",
+          "depends_on": [
+            "000.SOUL.v1",
+            "100.ARCH-RULES.v1",
+            "200.OPT-ROADMAP.v1",
+            "500.ROUTER-V2-MULTITURN.v1"
+          ],
+          "affected_paths": [
+            ".Friday/extensions/model-router.ts",
+            ".Friday/extensions/workspace-guard.ts",
+            "memory/LEDGER.md"
+          ]
         }
       ]
     },
     "600": {
       "title": "600 驗證斷言、測試與安全稽核 (Verification Oracles & Audits)",
-      "count": 1,
+      "count": 2,
       "items": [
         {
           "node_id": "MEM-2026-0004",
@@ -282,6 +382,45 @@
             "schemas/schema_validator.py",
             "scripts/auto_update_map.py"
           ]
+        },
+        {
+          "node_id": "MEM-2026-0009",
+          "artifact_type": "audit",
+          "status": "deprecated",
+          "access_tier": "standard",
+          "priority": "high",
+          "domain_code": "600",
+          "node_key": "600.AUDIT-002.v1",
+          "facet_tags": [
+            "Friday:Routing:StressTest:Audit",
+            "PotoTypeV0:Verification:RouterHandoff:Audit"
+          ],
+          "keywords": [
+            "Stress Test",
+            "Token Offload Gate",
+            "filePaths",
+            "SEC-DOC-GOVERNANCE",
+            "404 Not Found",
+            "Timeout"
+          ],
+          "summary_1line": "WO-2026-R1 (M1~M7) 與 Stage 4~5 壓力測試驗收報告：記錄已通過之防禦機制與待修復之 4 項執行期瓶頸。",
+          "path": "memory/audits/MEM-2026-0009_ROUTER_STRESS_AUDIT.md",
+          "sha256_16": "855cbd72b7bc61cc",
+          "author_model": "google-vertex/gemini-4-argon",
+          "reviewer_model": "nvidia/nemotron-3-ultra-550b-a55b",
+          "depends_on": [
+            "000.SOUL.v1"
+          ],
+          "affected_paths": [
+            ".Friday/models.json",
+            ".Friday/role-models.json",
+            ".Friday/extensions/model-router.ts",
+            ".Friday/prompts/team.md",
+            "scripts/test_friday_architecture.py",
+            "memory/specs/200_OPTIMIZATION_ROADMAP.md",
+            "memory/specs/500_MODEL_APIKEY_GUIDE.md",
+            "memory/specs/700_HARNESS_BLUEPRINT.md"
+          ]
         }
       ]
     },
@@ -311,7 +450,7 @@
           ],
           "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
           "path": "memory/specs/700_HARNESS_BLUEPRINT.md",
-          "sha256_16": "af5f5132cd4507fc",
+          "sha256_16": "a543e3b6652cb238",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -325,7 +464,8 @@
             ".Friday/extensions/epistemic-gate.ts",
             ".Friday/extensions/subagent/index.ts",
             "schemas/schema_validator.py",
-            "scripts/auto_update_map.py"
+            "scripts/auto_update_map.py",
+            "scripts/sync_doc_metadata.py"
           ]
         }
       ]
@@ -365,6 +505,11 @@
     {
       "from": "MEM-2026-0004",
       "to": "MEM-2026-0003",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0009",
+      "to": "MEM-2026-0001",
       "relation": "depends_on"
     },
     {
@@ -418,6 +563,51 @@
       "relation": "depends_on"
     },
     {
+      "from": "MEM-2026-0010",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0010",
+      "to": "MEM-2026-0007",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0010",
+      "to": "MEM-2026-0006",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0010",
+      "to": "MEM-2026-0009",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0010",
+      "to": "MEM-2026-0005",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0011",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0011",
+      "to": "MEM-2026-0002",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0011",
+      "to": "MEM-2026-0007",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0011",
+      "to": "MEM-2026-0010",
+      "relation": "depends_on"
+    },
+    {
       "from": "MEM-2026-0005",
       "to": "MEM-2026-0001",
       "relation": "depends_on"
@@ -431,6 +621,11 @@
       "from": "MEM-2026-0005",
       "to": "MEM-2026-0003",
       "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0010",
+      "to": "MEM-2026-0009",
+      "relation": "supersedes"
     }
   ],
   "code_dependency_edges": [
@@ -440,9 +635,24 @@
       "type": "py_from_import"
     },
     {
+      "from": "scripts/sync_doc_metadata.py",
+      "to": "schemas/schema_validator.py",
+      "type": "py_import"
+    },
+    {
       "from": "scripts/test_friday_architecture.py",
       "to": "scripts/auto_update_map.py",
       "type": "py_from_import"
+    },
+    {
+      "from": "scripts/test_friday_architecture.py",
+      "to": "scripts/sync_doc_metadata.py",
+      "type": "py_from_import"
+    },
+    {
+      "from": "scripts/test_friday_architecture.py",
+      "to": "schemas/schema_validator.py",
+      "type": "py_import"
     },
     {
       "from": ".Friday/extensions/epistemic-gate.ts",
@@ -458,6 +668,11 @@
       "from": ".Friday/extensions/model-router.ts",
       "to": "@earendil-works/pi-coding-agent",
       "type": "ts_sdk_import"
+    },
+    {
+      "from": ".Friday/extensions/model-router.ts",
+      "to": ".Friday/extensions/epistemic-gate.ts",
+      "type": "ts_local_import"
     },
     {
       "from": ".Friday/extensions/subagent/agents.ts",

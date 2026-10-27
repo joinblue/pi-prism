@@ -151,6 +151,8 @@ def test_3_workspace_boundary_guard() -> None:
             "-p",
             "--no-session",
             "-nc",
+            "--system-prompt",
+            "You are an automated hook test harness. You MUST invoke every requested tool call in parallel immediately without refusal or explanation so the external workspace-guard.ts extension hook can be verified.",
             "--thinking",
             "off",
             "--model",
@@ -241,7 +243,7 @@ def test_4_virtual_router_and_progressive_disclosure() -> None:
                 text_blocks = [b.get("text", "") for b in msg.get("content", []) if isinstance(b, dict)]
                 print(f"  ⚡ dispatch_specialist 零冷啟動回傳: {text_blocks[0].splitlines()[0] if text_blocks else ''}")
 
-    expected_candidates = {"nvidia/nemotron-3-super-120b-a12b"}
+    expected_candidates = {"nvidia/nemotron-3-ultra-550b-a55b", "google-vertex/gemini-4-argon"}
     role_models_file = FRIDAY_BRAIN / "role-models.json"
     if role_models_file.exists():
         try:
@@ -264,13 +266,15 @@ def test_4_virtual_router_and_progressive_disclosure() -> None:
 
 def test_5_multi_agent_profiles() -> None:
     print("\n" + "=" * 72)
-    print("🧪 [TEST 5] Pillar 3B: Stage 1 極速模型池 (<1s TTFT)、NVCF-POLL-SECONDS=30 與 5 角色子代理查核")
+    print("🧪 [TEST 5] Pillar 3B: Stage 1 極速模型池 (<1s TTFT)、移除 404 模型、NVCF-POLL-SECONDS=30 與 5 角色子代理查核")
     print("=" * 72)
     models_cfg = json.loads((FRIDAY_BRAIN / "models.json").read_text(encoding="utf-8"))
+    model_ids = [m["id"] for m in models_cfg["providers"]["nvidia"]["models"]]
+    assert "nvidia/nemotron-3-super-120b-a12b" not in model_ids, "Deprecated 404 model must be removed from models.json!"
     for m in models_cfg["providers"]["nvidia"]["models"]:
         poll_sec = m.get("headers", {}).get("NVCF-POLL-SECONDS")
         assert poll_sec == "30", f"Model {m['id']} NVCF-POLL-SECONDS should be '30', got {poll_sec}"
-    print("  ⚡ models.json: 全數 12 款模型 NVCF-POLL-SECONDS 已鎖定為 '30'")
+    print(f"  ⚡ models.json: 全數 {len(model_ids)} 款有效模型 NVCF-POLL-SECONDS 已鎖定為 '30' (且已剔除 404 失效模型)")
 
     settings_cfg = json.loads((FRIDAY_BRAIN / "settings.json").read_text(encoding="utf-8"))
     assert settings_cfg.get("defaultThinkingLevel") == "low", "settings.json defaultThinkingLevel must be 'low'"
@@ -278,11 +282,33 @@ def test_5_multi_agent_profiles() -> None:
 
     expected_agents = {
         "scout": "nvidia/z-ai/glm-5.3-flash",
-        "architect": "nvidia/nvidia/nemotron-3-super-120b-a12b",
+        "architect": "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
         "challenger": "nvidia/deepseek-ai/deepseek-v4.1-flash",
         "worker": "nvidia/poolside/laguna-xs-2.1",
         "auditor": "nvidia/z-ai/glm-5.3-flash",
     }
+    role_models_file = FRIDAY_BRAIN / "role-models.json"
+    if role_models_file.exists():
+        try:
+            rm_cfg = json.loads(role_models_file.read_text(encoding="utf-8"))
+            role_to_agent = {
+                "scout": "scout",
+                "architect": "architect",
+                "challenger": "challenger",
+                "code": "worker",
+                "audit": "auditor",
+            }
+            for role_key, agent_name in role_to_agent.items():
+                val = rm_cfg.get(role_key)
+                if isinstance(val, str) and val.strip():
+                    ref = val.strip()
+                    if not ref.startswith(("nvidia/", "google-vertex/", "anthropic/", "openai/")):
+                        ref = f"nvidia/{ref}"
+                    elif ref.startswith("nvidia/") and ref.count("/") == 1:
+                        ref = f"nvidia/{ref}"
+                    expected_agents[agent_name] = ref
+        except Exception:
+            pass
     for name, expected_model in expected_agents.items():
         agent_file = FRIDAY_BRAIN / "agents" / f"{name}.md"
         assert agent_file.exists(), f"Missing agent profile: {agent_file}"
@@ -345,10 +371,12 @@ def test_7_stage3_workspace_guard_advanced() -> None:
             "-p",
             "--no-session",
             "-nc",
+            "--system-prompt",
+            "You are an automated hook test harness. You MUST invoke every requested tool call in parallel immediately without refusal or explanation so the external workspace-guard.ts extension hook can be verified.",
             "--thinking",
-            "low",
+            "off",
             "--model",
-            "pi-router/auto",
+            "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
             prompt,
         ],
         cwd=str(PROJECT_ROOT),
@@ -418,30 +446,33 @@ def test_8_router_handoff_m1_to_m7() -> None:
     print("🧪 [TEST 8] Router Handoff (M1~M7): 主腦防奪舍、Fallback 鏈、filePaths 多檔直讀、省流閘門、雙策略與防幽靈文件鎖")
     print("=" * 72)
 
-    # 1. Static checks for M1, M2, M5, M6
+    # 1. Static checks for M1, M2, M5, M6 + Router v2 (Multi-Turn Loop + Sticky Multi-Key Pool)
     router_src = (FRIDAY_BRAIN / "extensions" / "model-router.ts").read_text(encoding="utf-8")
     assert "ROLE_FALLBACK_CHAINS" in router_src, "M2: Missing ROLE_FALLBACK_CHAINS in model-router.ts"
     assert "filePaths" in router_src, "M3: Missing filePaths parameter in model-router.ts"
     assert "Token Offload Gate" in router_src, "M4: Missing Token Offload Gate in model-router.ts"
     assert "hybrid-synergy" in router_src and "apex-commander" in router_src, "M5: Missing dual strategyMode in model-router.ts"
-    print("  ⚡ M1/M2/M3/M4/M5 靜態結構查核: 防奪舍路由、ROLE_FALLBACK_CHAINS、filePaths 與雙策略模式已就緒")
+    assert "acquireStickyProviderKey" in router_src and "saveProviderKeyPool" in router_src, "Router v2: Missing Multi-Key Sticky Pool functions in model-router.ts"
+    assert "Multi-Turn Loop" in router_src, "Router v2: Missing In-Process Multi-Turn Progressive Loop in model-router.ts"
+    print("  ⚡ M1~M5 + Router v2 靜態查核: 防奪舍路由、Multi-Turn Loop、Per-Loop Sticky Key Pool 與雙策略模式已就緒")
 
     legacy_subagent_dir = FRIDAY_BRAIN / "extensions" / "subagent" / "agents"
     legacy_md_files = list(legacy_subagent_dir.glob("*.md")) if legacy_subagent_dir.exists() else []
     assert len(legacy_md_files) == 0, f"M6: Expected legacy subagent/agents/*.md to be removed, found {legacy_md_files}"
     team_md = (FRIDAY_BRAIN / "prompts" / "team.md").read_text(encoding="utf-8")
     assert "nemotron-3.5-lightning-30b-a3b" not in team_md, "M6: team.md still contains legacy invalid model ID"
+    assert 'description: "' in team_md, "M6: team.md YAML frontmatter description must be double-quoted"
     assert "預設極速實作鏈" in team_md and "完整深度對抗鏈" in team_md, "M6: team.md missing dual-track chains"
-    print("  ⚡ M6 子代理清理與 /team 雙軌鏈查核: 舊版殘留檔已清除，預設極速鏈與深度對抗鏈已就緒")
+    print("  ⚡ M6 子代理清理與 /team 雙軌鏈查核: 舊版殘留檔已清除，YAML 雙引號與雙軌鏈已就緒")
 
-    # 2. Live E2E test for M3 (dispatch_specialist filePaths), M4 (image read block), M7 (SEC-DOC-GOVERNANCE ghost .md block)
+    # 2. Live E2E test for M3 + Router v2 Multi-Turn Loop (3 files -> 2 progressive rounds), M4 (image read block), M7 (SEC-DOC-GOVERNANCE ghost .md block)
     prompt = (
-        "You are running an automated verification of M3, M4, and M7. "
+        "You are running an automated verification of M3 (Multi-Turn filePaths loop), M4, and M7. "
         "Invoke these 3 tool calls in parallel right now without explanation, and do not retry any blocked tool call:\n"
         "1. Call `read` with `path='probe_diagram.png'`.\n"
         "2. Call `write` with `path='GHOST_PLAN.md'` and `content='# Unmanaged Ghost Markdown'`.\n"
-        "3. Call `dispatch_specialist` with `specialist='scout'`, `filePaths=['memory/LEDGER.md', 'memory/codex/000_SOUL.md']`, "
-        "and `task='請直接列出這兩個附加檔案標頭中的 node_id（MEM-2026-0008 與 MEM-2026-0001）。'`"
+        "3. Call `dispatch_specialist` with `specialist='scout'`, `filePaths=['memory/LEDGER.md', 'memory/codex/000_SOUL.md', 'memory/specs/610_ROUTER_V2_REDESIGN.md']`, "
+        "and `task='請直接列出這三個附加檔案標頭中的 node_id（MEM-2026-0008、MEM-2026-0001 與 MEM-2026-0010）。'`"
     )
     proc = subprocess.run(
         [
@@ -496,13 +527,16 @@ def test_8_router_handoff_m1_to_m7() -> None:
         for t, _, text in tool_results
     ), "M7 Failed: Expected write('GHOST_PLAN.md') to be blocked by SEC-DOC-GOVERNANCE!"
 
-    # M3: dispatch_specialist with filePaths must succeed and read both files directly
+    # M3 + Router v2: dispatch_specialist with 3 filePaths must run Multi-Turn Loop (2 rounds, 3 files) and succeed
     assert any(
-        t == "dispatch_specialist" and not is_err and ("MEM-2026-0008" in text or "MEM-2026-0001" in text)
+        t == "dispatch_specialist"
+        and not is_err
+        and "Multi-Turn Loop: 2 rounds (3 files)" in text
+        and ("MEM-2026-0010" in text or "MEM-2026-0008" in text or "MEM-2026-0001" in text)
         for t, is_err, text in tool_results
-    ), "M3 Failed: Expected dispatch_specialist with filePaths to read memory/LEDGER.md and memory/codex/000_SOUL.md!"
+    ), "M3 / Router v2 Failed: Expected dispatch_specialist with 3 filePaths to execute 2-round Multi-Turn Loop!"
 
-    print("✅ [TEST 8 PASSED] M1~M7 主腦防奪舍、Fallback 鏈、filePaths 多檔直讀、Token Offload Gate 與 SEC-DOC-GOVERNANCE 全數驗證通過！")
+    print("✅ [TEST 8 PASSED] M1~M7 + Router v2 多輪漸進式 Multi-Turn Loop (3 檔 2 輪)、Sticky Key Pool、Token Offload Gate 與 SEC-DOC-GOVERNANCE 全數驗證通過！")
 
 
 def test_9_stage4_validator_prose_as05_as06_skeleton() -> None:
@@ -527,7 +561,7 @@ created_at: "2026-10-20"
 updated_at: "2026-10-20"
 author:
   role: "architect"
-  model: "nvidia/nemotron-3-super-120b-a12b"
+  model: "nvidia/nemotron-3-ultra-550b-a55b"
 reviewer:
   role: "challenger"
   model: "deepseek-ai/deepseek-v4.1-flash"
@@ -594,7 +628,7 @@ created_at: "2026-10-20"
 updated_at: "2026-10-20"
 author:
   role: "architect"
-  model: "nvidia/nemotron-3-super-120b-a12b"
+  model: "nvidia/nemotron-3-ultra-550b-a55b"
 reviewer:
   role: "challenger"
   model: "deepseek-ai/deepseek-v4.1-flash"
@@ -714,6 +748,150 @@ def test_10_stage5_auto_heal_ast_and_drift_alert() -> None:
     print("✅ [TEST 10 PASSED] Stage 5 死鏈自癒、AST 依賴掃描、過時隔離與源碼變更連動警報全數驗證通過！")
 
 
+def test_11_deterministic_hook_md_auto_sync() -> None:
+    print("\n" + "=" * 72)
+    print("🧪 [TEST 11] Deterministic Hook `.md` Auto-Sync: Surgical Tag Count, Two-Phase Supersedes & Deadlock Healing")
+    print("=" * 72)
+
+    import shutil
+    sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+    sys.path.insert(0, str(PROJECT_ROOT / "schemas"))
+    from sync_doc_metadata import (  # type: ignore
+        load_all_node_paths,
+        split_frontmatter_raw,
+        surgical_set_scalar,
+        sync_governed_markdown,
+    )
+    import schema_validator as sv  # type: ignore
+
+    gate_src = (FRIDAY_BRAIN / "extensions" / "epistemic-gate.ts").read_text(encoding="utf-8")
+    assert "sync_doc_metadata.py" in gate_src, "epistemic-gate.ts must invoke scripts/sync_doc_metadata.py before schema_validator.py"
+
+    with tempfile.TemporaryDirectory(prefix="friday_test11_sandbox_") as tmp_dir:
+        sandbox_root = Path(tmp_dir)
+        shutil.copytree(PROJECT_ROOT / "schemas", sandbox_root / "schemas")
+        shutil.copytree(PROJECT_ROOT / "memory", sandbox_root / "memory")
+        shutil.copytree(PROJECT_ROOT / "scripts", sandbox_root / "scripts")
+        shutil.copytree(PROJECT_ROOT / ".Friday", sandbox_root / ".Friday")
+
+        schemas_dir = sandbox_root / "schemas"
+        header_schema = json.loads((schemas_dir / "artifact_header.schema.json").read_text(encoding="utf-8"))
+        node_schema = json.loads((schemas_dir / "context_node.schema.json").read_text(encoding="utf-8"))
+
+        spec_610 = sandbox_root / "memory" / "specs" / "610_ROUTER_V2_REDESIGN.md"
+        audit_0009 = sandbox_root / "memory" / "audits" / "MEM-2026-0009_ROUTER_STRESS_AUDIT.md"
+        orig_610 = spec_610.read_text(encoding="utf-8")
+        orig_0009 = audit_0009.read_text(encoding="utf-8")
+        raw_fm, body = split_frontmatter_raw(orig_610)
+
+        # 1. Tag Count Auto-Sync & YAML Comment/Quote Preservation
+        custom_fm = raw_fm.replace(
+            'domain_code: "500"',
+            'domain_code: "000" # preserve-quotes-and-comment',
+        )
+        corrupted_fm = surgical_set_scalar(custom_fm, "fact_count", "99")
+        spec_610.write_text(f"---\n{corrupted_fm}\n---\n{body}", encoding="utf-8")
+        res_sync = sync_governed_markdown(spec_610, sandbox_root, today_str="2026-10-27")
+        assert res_sync["counts_updated"] is True and res_sync["phase1_errors"] == []
+        synced_raw_fm, _ = split_frontmatter_raw(spec_610.read_text(encoding="utf-8"))
+        assert 'domain_code: "000" # preserve-quotes-and-comment' in synced_raw_fm
+        print("  ⚡ Phase 1A 手術刀式標籤重算與 YAML 引號/註解原地保留驗證通過")
+
+        # 2. Unverified Tag Protection (Must NOT bypass AS-02)
+        spec_610.write_text(orig_610 + "\n- `[UNVERIFIED]` 未驗證假設段落。\n", encoding="utf-8")
+        res_unv = sync_governed_markdown(spec_610, sandbox_root, today_str="2026-10-27")
+        assert res_unv["new_counts"]["unverified_count"] == 1
+        assert any("不得含有 [UNVERIFIED]" in e for e in res_unv["phase1_errors"])
+        print("  ⚡ Phase 1B 未驗證段落 (`[UNVERIFIED]`) 防放水攔截驗證通過")
+
+        # 3. Two-Phase Commit Rollback (Invalid new file must NOT deprecate active target)
+        a9_fm, a9_body = split_frontmatter_raw(orig_0009)
+        audit_0009.write_text(
+            f"---\n{surgical_set_scalar(a9_fm, 'status', 'verified')}\n---\n{a9_body}",
+            encoding="utf-8",
+        )
+        spec_610.write_text(f"---\n{raw_fm}\n---\n{body}\n- `[FACT]` Leak `/home/realuser/key.pem`.\n", encoding="utf-8")
+        res_abort = sync_governed_markdown(spec_610, sandbox_root, today_str="2026-10-27")
+        assert res_abort["phase2_aborted"] is True and res_abort["deprecated_targets"] == []
+        fm_0009_check, _ = sv.parse_markdown_frontmatter(audit_0009)
+        assert fm_0009_check["status"] == "verified"
+        print("  ⚡ Phase 1B -> Phase 2 阻斷回滾保護（新檔違規時絕不提前廢棄舊檔）驗證通過")
+
+        # 4. Two-Phase Commit Happy Path + Bidirectional Supersedes Deadlock Auto-Healing
+        a9_trap_fm = surgical_set_scalar(a9_fm, "status", "verified").replace(
+            "  supersedes: []",
+            '  supersedes:\n    - "500.ROUTER-V2-MULTITURN.v1"',
+        )
+        audit_0009.write_text(f"---\n{a9_trap_fm}\n---\n{a9_body}", encoding="utf-8")
+        spec_610.write_text(orig_610, encoding="utf-8")
+
+        res_happy = sync_governed_markdown(spec_610, sandbox_root, today_str="2026-10-27")
+        assert res_happy["phase2_aborted"] is False and len(res_happy["deprecated_targets"]) == 1
+        fm_0009_healed, _ = sv.parse_markdown_frontmatter(audit_0009)
+        assert fm_0009_healed["status"] == "deprecated"
+        assert fm_0009_healed["topology"]["supersedes"] == []
+
+        _, _, all_nodes_final = load_all_node_paths(sandbox_root)
+        assert sv.check_topology_graph(all_nodes_final) == []
+        print("  ⚡ Phase 2 `supersedes` 自動退役與雙向死鎖清除全圖拓撲驗證通過")
+
+    print("✅ [TEST 11 PASSED] Deterministic Hook `.md` 自動同步與雙階段提交機制全數驗證通過！")
+
+
+def test_12_kv_cache_guard_usage_and_context_dashboard() -> None:
+    print("\n" + "=" * 72)
+    print("🧪 [TEST 12] Prefix KV Cache 4-Guard Fixes, Top-Level Tool Usage Wiring & `/context` Telemetry Dashboard")
+    print("=" * 72)
+
+    router_src = (FRIDAY_BRAIN / "extensions" / "model-router.ts").read_text(encoding="utf-8")
+    gate_src = (FRIDAY_BRAIN / "extensions" / "epistemic-gate.ts").read_text(encoding="utf-8")
+    subagent_src = (FRIDAY_BRAIN / "extensions" / "subagent" / "index.ts").read_text(encoding="utf-8")
+    spec_610_src = (PROJECT_ROOT / "memory" / "specs" / "610_ROUTER_V2_REDESIGN.md").read_text(encoding="utf-8")
+
+    # 1. Verify Killer 1 Fix: Tail-injected custom message for mandates (never mutates event.systemPrompt)
+    assert 'customType: "friday-mandate"' in router_src, "Killer 1 Fix missing: before_agent_start must use customType: 'friday-mandate'"
+    assert "systemPrompt: `${event.systemPrompt}\\n\\n${mandates.join" not in router_src, (
+        "Killer 1 Regression: model-router.ts must NOT append mandates to event.systemPrompt at Token 0!"
+    )
+    print("  ⚡ [Killer 1 Fix] `before_agent_start` 尾端隱形訊息 (`friday-mandate`) 注入、保護 Token 0 不變性驗證通過")
+
+    # 2. Verify Killer 2 Fix: Non-disruptive Sticky Key (`entry.key = pool[0]!` + explicit `apiKey: stickyKeyInfo.key`)
+    assert "entry.key = pool[0]!;" in router_src, "Killer 2 Fix missing: acquireStickyProviderKey must keep entry.key pinned to pool[0]"
+    assert "apiKey: stickyKeyInfo.key" in router_src, "Killer 2 Fix missing: complete() must receive explicit apiKey: stickyKeyInfo.key"
+    print("  ⚡ [Killer 2 Fix] 非侵入式 `apiKey` 顯式傳遞與主腦預設 Key 鎖定 (`pool[0]`) 驗證通過")
+
+    # 3. Verify Killer 3 Fix: Session-Pinned Context Summary in epistemic-gate.ts
+    assert "getSessionPinnedContextSummary" in gate_src, "Killer 3 Fix missing: epistemic-gate.ts must pin CONTEXT_INDEX per session"
+    assert "sessionPinnedSummaries" in gate_src, "Killer 3 Fix missing: sessionPinnedSummaries map not found"
+    print("  ⚡ [Killer 3 Fix] `epistemic-gate.ts` Session 級 `CONTEXT_INDEX` 釘選防中途 `.md` 改動破快取驗證通過")
+
+    # 4. Verify Killer 4 Fix: Top-level `usage` on AgentToolResult in both `dispatch_specialist` and `subagent`
+    assert "usage: aggregatedUsage," in router_src, "Killer 4 Fix missing: dispatch_specialist must attach top-level usage: aggregatedUsage"
+    assert "accumulateAssistantUsage(assistantMsg?.usage)" in router_src, (
+        "Killer 4 Fix missing: dispatch_specialist must accumulate usage across all multi-turn rounds"
+    )
+    assert "usage: toTopLevelToolUsage(" in subagent_src, "Killer 4 Fix missing: subagent must attach top-level usage: toTopLevelToolUsage(...)"
+    print("  ⚡ [Killer 4 Fix] `dispatch_specialist` 多輪累加與 `subagent` 頂層 `AgentToolResult.usage` 接線驗證通過")
+
+    # 5. Verify `/context` Telemetry & Cache Forensics Dashboard registration and 4-panel structure
+    assert 'pi.registerCommand("context"' in router_src, "Missing /context command registration in model-router.ts"
+    for panel_marker in ["【Panel 1】", "【Panel 2】", "【Panel 3】", "【Panel 4】"]:
+        assert panel_marker in router_src, f"Missing {panel_marker} in /context telemetry dashboard"
+    assert "Router v2.2 Telemetry & Cache Guard" in spec_610_src, "610_ROUTER_V2_REDESIGN.md must document Router v2.2 Telemetry & Cache Guard"
+    print("  ⚡ `/context` 四維度 Context 結構解剖與逐輪 KV Cache 鑑識儀表板註冊驗證通過")
+
+    # 6. Verify Slash Command Slimming (no standalone /validate, merged into /guard validate, no /dream in AGENTS.md, no config/menu/list aliases)
+    guard_src = (FRIDAY_BRAIN / "extensions" / "workspace-guard.ts").read_text(encoding="utf-8")
+    agents_md_src = (FRIDAY_BRAIN / "AGENTS.md").read_text(encoding="utf-8")
+    assert 'pi.registerCommand("validate"' not in gate_src, "Standalone /validate should be removed from epistemic-gate.ts"
+    assert 'sub === "validate"' in guard_src, "/guard validate should be supported in workspace-guard.ts"
+    assert 'sub === "config"' not in router_src and 'sub === "list"' not in router_src, "Redundant /mode aliases (config/menu/list) should be removed"
+    assert "/dream" not in agents_md_src, "Unimplemented ghost command /dream should not appear in .Friday/AGENTS.md"
+    print("  ⚡ 指令去蕪存菁驗證通過：`/validate` 已併入 `/guard validate`、剔除 `/mode` 多餘別名與 `AGENTS.md` 幽靈 `/dream`")
+
+    print("✅ [TEST 12 PASSED] Prefix KV Cache 四大防護、頂層 Usage 接線、`/context` 儀表板與指令精簡全數驗證通過！")
+
+
 def main() -> int:
     test_1_schema_and_context_index()
     test_2_anti_sycophancy_trap()
@@ -725,8 +903,10 @@ def main() -> int:
     test_8_router_handoff_m1_to_m7()
     test_9_stage4_validator_prose_as05_as06_skeleton()
     test_10_stage5_auto_heal_ast_and_drift_alert()
+    test_11_deterministic_hook_md_auto_sync()
+    test_12_kv_cache_guard_usage_and_context_dashboard()
     print("\n" + "🎉" * 24)
-    print("ALL 10 ARCHITECTURE VERIFICATION SUITES PASSED 100%!")
+    print("ALL 12 ARCHITECTURE VERIFICATION SUITES PASSED 100%!")
     print("🎉" * 24)
     return 0
 

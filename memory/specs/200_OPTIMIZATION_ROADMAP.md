@@ -5,7 +5,7 @@ access_tier: "standard"
 priority: "critical"
 status: "verified"
 created_at: "2026-10-18"
-updated_at: "2026-10-18"
+updated_at: "2026-10-20"
 author:
   role: "architect"
   model: "deepseek-ai/deepseek-v4.1-flash"
@@ -59,6 +59,7 @@ topology:
     - ".Friday/extensions/epistemic-gate.ts"
     - "schemas/schema_validator.py"
     - "scripts/auto_update_map.py"
+    - "scripts/sync_doc_metadata.py"
 ---
 
 # 🗺️ `200.OPT-ROADMAP.v1` (MEM-2026-0007) — 通用優化、防錯亂治理與自動化演進藍圖
@@ -72,14 +73,14 @@ topology:
 
 | 編號 | 盤點項目 | 現況狀態 | 具體缺失與待實作細節（100% 完整收錄） | 實際目標檔案 | 對應執行階段 |
 | :--- | :--- | :---: | :--- | :--- | :---: |
-| **優化 1** | **繁體中文強制規範** | 🟡 不夠完善 | 1. 在主腦與 **5 個子代理**強制規定「使用繁體中文思考 (`thinking`) 與回應」<br>2. 新增剛性條款：「執行任何 `bash` 指令前，必先以繁體中文說明目的與影響範圍」 | `.Friday/AGENTS.md`<br>`.Friday/agents/*.md` | **Stage 2** |
-| **優化 2** | **高信噪比三段式通報協議** | 🔴 **完全沒有** | 1. 強制定義**【結論 / 邊界與異常 / 下一步行動】**極簡三段式結構<br>2. 明訂**「客觀數據與對照表格豁免行數限制」**（砍除無意義寒暄，保留硬核資訊） | `.Friday/AGENTS.md` | **Stage 2** |
-| **優化 3** | **`workspace-guard.ts` 指令與路徑防禦升級** | 🟡 不夠完善 | 1. **引號感知（Quote-Aware）**：剝離單雙引號字串，避免 `echo "rm -rf /"` 誤判<br>2. **`$(...)` / 反引號 子殼層遞迴拆解**：防止把危險指令藏在子殼層繞過檢查<br>3. **唯讀指令豁免**：允許安全檢索（如 `grep`）讀取非機密設定而不誤殺<br>4. **鎖定 `schemas/` 防改鎖**：禁止 Agent 私自修改驗證規則開後門<br>5. **`SEC-PORTABILITY` 絕對路徑防洩漏攔截**：動態攔截 `write`/`edit` 寫入本機絕對路徑（`os.homedir()`、`/home/<user>`、`file:///`），當場退回要求改用相對路徑重寫<br>6. **自癒處方籤 (`RemediationPointer`)**：攔截時明確給出替代安全做法 | `.Friday/extensions/workspace-guard.ts` | **Stage 3** |
-| **優化 4** | **Schema 處方籤、分級散文預算 & 隱私/版本互斥檢查** | 🟡 不夠完善 | 1. **依 `artifact_type` 分級之純散文行數預算（Tiered Prose Budget）**：`constitution`/`rule`/`adr` $\le 50$ 行、`spec`/`audit` $\le 160$ 行（表格、Mermaid 與程式碼區塊豁免）<br>2. **`AS-05` 路徑可攜性與隱私檢查**：掃描記憶節點內文，禁止出現本機絕對路徑（`/home/...` 或 `file:///`）<br>3. **`AS-06` 新舊版本互斥與過時狀態檢查**：被 `supersedes` 取代之舊節點必須降級為 `archived` 或 `deprecated`，防止新舊規範同時 `verified` 導致 Agent 錯亂<br>4. **YAML 處方籤骨架輸出**：當驗證未通過時，自動印出標準 YAML Frontmatter 修復範本 | `schemas/schema_validator.py` | **Stage 4** |
-| **優化 5** | **`auto_update_map.py` 拓撲與死鏈自癒** | 🟡 不夠完善 | 1. **Markdown 死鏈自動修復 (`heal_dead_links`)**：檔案搬移後自動修正文內連結<br>2. **Python / TypeScript AST Import 依賴掃描**：自動解析真實程式碼依賴並寫入 `CONTEXT_INDEX.json` 與 `CONTEXT_MAP.md` | `scripts/auto_update_map.py` | **Stage 5** |
-| **優化 6** | **唯一活躍台帳 `LEDGER.md` & 通用技能書** | 🔴 **完全沒有** | 1. 建立動態狀態檔 `memory/LEDGER.md`（嚴格限制上限 $\le 80$ 行，只留活躍工單，完工即歸檔）<br>2. 建立 `.Friday/skills/` 通用軟體工程技能書（如根因除錯、架構重構標準流程） | `memory/LEDGER.md`<br>`.Friday/skills/` | **Stage 2**<br>**Stage 6** |
-| **自動化 A** | **極速反應修復 + 固定主腦調派專家架構** | 🟡 需重構 | 1. 移除慢速塞車模型，改用實測 `< 1s TTFT` 模型池，並將 `NVCF-POLL-SECONDS` 降至 `"30"`、預設 `thinkingLevel: "low"`<br>2. **固定主腦（Orchestrator）**負責任務解析，搭配確定性專家調派（不靠主腦每回合自我換腦，消除 KV Cache 失效與關鍵字誤判） | `.Friday/models.json`<br>`.Friday/settings.json`<br>`.Friday/extensions/model-router.ts`<br>`.Friday/agents/*.md` | **Stage 1** |
-| **自動化 B** | **全自動驗證、過時隔離與源碼連動警報 Hook** | 🟡 半手動 (40%) | 1. **Active-Only 注入過濾**：`epistemic-gate.ts` 自動過濾 `archived`/`deprecated` 舊節點，防止載入過時資訊<br>2. **自動驗證與重編 Hook**：修改 `memory/` 自動執行 `schema_validator.py` 與 `auto_update_map.py`<br>3. **`affected_paths` 源碼變更連動警報（Code-to-Spec Drift Alert）**：修改受保護源碼時，自動提醒同步檢視對應 `spec` 藍圖節點 | `.Friday/extensions/epistemic-gate.ts` | **Stage 5** |
+| **優化 1** | **繁體中文強制規範** | ✅ 已完成 | 1. 在主腦與 **5 個子代理**強制規定「使用繁體中文思考 (`thinking`) 與回應」<br>2. 新增剛性條款：「執行任何 `bash` 指令前，必先以繁體中文說明目的與影響範圍」 | `.Friday/AGENTS.md`<br>`.Friday/agents/*.md` | **Stage 2** |
+| **優化 2** | **高信噪比三段式通報協議** | ✅ 已完成 | 1. 強制定義**【結論 / 邊界與異常 / 下一步行動】**極簡三段式結構<br>2. 明訂**「客觀數據與對照表格豁免行數限制」**（砍除無意義寒暄，保留硬核資訊） | `.Friday/AGENTS.md` | **Stage 2** |
+| **優化 3** | **`workspace-guard.ts` 指令與路徑防禦升級** | ✅ 已完成 | 1. **引號感知（Quote-Aware）**：剝離單雙引號字串，避免 `echo "rm -rf /"` 誤判<br>2. **`$(...)` / 反引號 子殼層遞迴拆解**：防止把危險指令藏在子殼層繞過檢查<br>3. **唯讀指令豁免**：允許安全檢索（如 `grep`）讀取非機密設定而不誤殺<br>4. **鎖定 `schemas/` 防改鎖**：禁止 Agent 私自修改驗證規則開後門<br>5. **`SEC-PORTABILITY` 絕對路徑防洩漏攔截**：動態攔截 `write`/`edit` 寫入本機絕對路徑（`os.homedir()`、`/home/<user>`、`file:///`），當場退回要求改用相對路徑重寫<br>6. **自癒處方籤 (`RemediationPointer`)**：攔截時明確給出替代安全做法 | `.Friday/extensions/workspace-guard.ts` | **Stage 3** |
+| **優化 4** | **Schema 處方籤、分級散文預算 & 隱私/版本互斥檢查** | ✅ 已完成 | 1. **依 `artifact_type` 分級之純散文行數預算（Tiered Prose Budget）**：`constitution`/`rule`/`adr` $\le 50$ 行、`spec`/`audit` $\le 160$ 行（表格、Mermaid 與程式碼區塊豁免）<br>2. **`AS-05` 路徑可攜性與隱私檢查**：掃描記憶節點內文，禁止出現本機絕對路徑（`/home/...` 或 `file:///`）<br>3. **`AS-06` 新舊版本互斥與過時狀態檢查**：被 `supersedes` 取代之舊節點必須降級為 `archived` 或 `deprecated`，防止新舊規範同時 `verified` 導致 Agent 錯亂<br>4. **YAML 處方籤骨架輸出**：當驗證未通過時，自動印出標準 YAML Frontmatter 修復範本 | `schemas/schema_validator.py` | **Stage 4** |
+| **優化 5** | **`auto_update_map.py` 拓撲與死鏈自癒** | ✅ 已完成 | 1. **Markdown 死鏈自動修復 (`heal_dead_links`)**：檔案搬移後自動修正文內連結<br>2. **Python / TypeScript AST Import 依賴掃描**：自動解析真實程式碼依賴並寫入 `CONTEXT_INDEX.json` 與 `CONTEXT_MAP.md` | `scripts/auto_update_map.py` | **Stage 5** |
+| **優化 6** | **唯一活躍台帳 `LEDGER.md` & 通用技能書** | 🟡 台帳已建 | 1. 建立動態狀態檔 `memory/LEDGER.md`（嚴格限制上限 $\le 80$ 行，只留活躍工單，完工即歸檔）<br>2. 建立 `.Friday/skills/` 通用軟體工程技能書（如根因除錯、架構重構標準流程） | `memory/LEDGER.md`<br>`.Friday/skills/` | **Stage 2**<br>**Stage 6** |
+| **自動化 A** | **極速反應修復 + 固定主腦調派專家 + Prefix KV Cache 物理防護與 `/context` 儀表板** | ✅ 已完成 | 1. 移除慢速塞車模型，改用實測 `< 1s TTFT` 模型池，並將 `NVCF-POLL-SECONDS` 降至 `"30"`、預設 `thinkingLevel: "low"`<br>2. **固定主腦（Orchestrator）**負責任務解析，搭配確定性專家調派（不靠主腦每回合自我換腦，消除 KV Cache 失效與關鍵字誤判）<br>3. **Prefix KV Cache 四大防護**：尾端隱形訊息注入 `[MANDATE]`、非侵入式專家 `apiKey` 傳遞、Session 級 `CONTEXT_INDEX` 釘選、多輪頂層 `AgentToolResult.usage` 匯總與 `/context` 鑑識儀表板 | `.Friday/models.json`<br>`.Friday/settings.json`<br>`.Friday/extensions/model-router.ts`<br>`.Friday/extensions/epistemic-gate.ts`<br>`.Friday/extensions/subagent/index.ts` | **Stage 1** |
+| **自動化 B** | **全自動 `.md` 同步、驗證、過時隔離與源碼連動警報 Hook** | ✅ 已完成 | 1. **Active-Only 注入過濾**：`epistemic-gate.ts` 自動過濾 `archived`/`deprecated` 舊節點，防止載入過時資訊<br>2. **Two-Phase Commit `.md` 自動同步 (`sync_doc_metadata.py`) + 驗證與重編 Hook**：修改 `memory/` 自動原地重算標籤計數、同步 SSOT 模型表、自動將 `supersedes` 舊節點降級為 `deprecated`，再執行 `schema_validator.py` 與 `auto_update_map.py`<br>3. **`affected_paths` 源碼變更連動警報（Code-to-Spec Drift Alert）**：修改受保護源碼時，自動提醒同步檢視對應 `spec` 藍圖節點 | `.Friday/extensions/epistemic-gate.ts`<br>`scripts/sync_doc_metadata.py` | **Stage 5** |
 | **自動化 C** | **`/dream` 夢境記憶整理機制** | 🔴 **完全沒有 (0%)** | 1. **手動 `/dream [deep]`**：三階段睡眠記憶鞏固（NREM `scout` 篩選 Session 軌跡 ➔ REM `architect` 更新 `memory/LEDGER.md` 與提純至 `200_DECISIONS.md` ➔ `schema_validator.py` + `auto_update_map.py` 神諭驗收）<br>2. **退出微夢境 (`session_shutdown` Hook)**：離開 `pi` 時毫秒級刷新索引並寫入 3 行摘要至 `memory/episodic/SESSION_DIGEST.md` | `.Friday/extensions/epistemic-gate.ts`<br>`.Friday/prompts/dream.md`<br>`memory/episodic/SESSION_DIGEST.md` | **Stage 6** |
 
 ---
@@ -91,9 +92,9 @@ topology:
    - [`.Friday/models.json`](../../.Friday/models.json)：將 `"NVCF-POLL-SECONDS"` 從 `"3600"` 改為 `"30"`。
    - [`.Friday/settings.json`](../../.Friday/settings.json)：設定預設思考層級 `"defaultThinkingLevel": "low"`。
    - [`.Friday/agents/*.md`](../../.Friday/agents/scout.md)：將 5 個專家子代理全面綁定實測 `< 1s TTFT` 的極速模型池：
-     - 主腦（Main Orchestrator）：固定為 `nvidia/nemotron-3-super-120b-a12b`（TTFT `0.28s`，120B 旗艦推理）
+     - 主腦（Main Orchestrator）：固定為 `google-vertex/gemini-4-argon`、專家層使用 `nvidia/nemotron-3-ultra-550b-a55b` / `z-ai/glm-5.3`
      - `scout`（高速探索）：`nvidia/z-ai/glm-5.3-flash`（TTFT `0.60s`，1M Context）
-     - `architect`（架構設計）：`nvidia/nvidia/nemotron-3-super-120b-a12b`（TTFT `0.28s`）
+     - `architect`（架構設計）：`nvidia/nemotron-3-ultra-550b-a55b`
      - `challenger`（紅隊找碴）：`nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`（TTFT `0.39s`，異體跨模型推理）
      - `worker`（程式實作）：`nvidia/poolside/laguna-xs-2.1`（TTFT `0.28s`，程式碼專精）
      - `auditor`（神諭驗收）：`nvidia/z-ai/glm-5.3-flash`（TTFT `0.60s`）
@@ -124,12 +125,13 @@ topology:
 
 ---
 
-### Stage 5：`auto_update_map.py` 死鏈/AST 自癒 ＋ `epistemic-gate.ts` 全自動驗證、過時隔離與源碼變更連動警報 Hook
+### Stage 5：`auto_update_map.py` 死鏈/AST 自癒 ＋ `sync_doc_metadata.py` 雙階段 `.md` 自動同步 ＋ `epistemic-gate.ts` 全自動驗證與源碼變更連動警報 Hook
 1. `[INFERRED]` **修改目標（涵蓋【優化 5】＋【自動化 B】）**：
    - [`scripts/auto_update_map.py`](../../scripts/auto_update_map.py)：新增 Markdown 死鏈自動修復（`heal_dead_links`）與 Python/TS AST Import 依賴掃描。
+   - [`scripts/sync_doc_metadata.py`](../../scripts/sync_doc_metadata.py)：新增 Two-Phase Commit 確定性 `.md` 同步腳本，原地重算四級標籤計數、同步 SSOT 模型表，並於新檔合規時自動將 `supersedes` 舊節點降級為 `deprecated`。
    - [`.Friday/extensions/epistemic-gate.ts`](../../.Friday/extensions/epistemic-gate.ts)：
      1. **過時節點自動隔離（Active-Only Injection）**：注入 System Prompt 時自動排除 `archived` 與 `deprecated` 節點。
-     2. **全自動驗證與重編 Hook**：監聽 `write`/`edit` 修改 `memory/` 時，自動執行 `schema_validator.py` 與 `auto_update_map.py`，失敗時將處方籤注入 Tool Result 強迫當回合自癒。
+     2. **全自動同步、驗證與重編 Hook**：監聽 `write`/`edit` 修改 `memory/` 時，自動依序執行 `sync_doc_metadata.py`、`schema_validator.py` 與 `auto_update_map.py`，失敗時將處方籤注入 Tool Result 強迫當回合自癒。
      3. **`affected_paths` 源碼變更連動警報（Code-to-Spec Drift Alert）**：修改受保護源碼時，自動比對 `CONTEXT_INDEX.json` 提醒同步更新對應 `spec` 藍圖節點。
 
 ---

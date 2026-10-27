@@ -502,6 +502,36 @@ export default function (pi: ExtensionAPI) {
 					results,
 				});
 
+			const toTopLevelToolUsage = (results: SingleResult[]) => {
+				let input = 0;
+				let output = 0;
+				let cacheRead = 0;
+				let cacheWrite = 0;
+				let costTotal = 0;
+				for (const r of results) {
+					input += r.usage?.input ?? 0;
+					output += r.usage?.output ?? 0;
+					cacheRead += r.usage?.cacheRead ?? 0;
+					cacheWrite += r.usage?.cacheWrite ?? 0;
+					costTotal += r.usage?.cost ?? 0;
+				}
+				const totalTokens = input + output + cacheRead + cacheWrite;
+				return {
+					input,
+					output,
+					cacheRead,
+					cacheWrite,
+					totalTokens,
+					cost: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						total: costTotal,
+					},
+				};
+			};
+
 			if (modeCount !== 1) {
 				const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
 				return {
@@ -588,6 +618,7 @@ export default function (pi: ExtensionAPI) {
 						return {
 							content: [{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` }],
 							details: makeDetails("chain")(results),
+							usage: toTopLevelToolUsage(results),
 							isError: true,
 						};
 					}
@@ -596,6 +627,7 @@ export default function (pi: ExtensionAPI) {
 				return {
 					content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
 					details: makeDetails("chain")(results),
+					usage: toTopLevelToolUsage(results),
 				};
 			}
 
@@ -680,6 +712,7 @@ export default function (pi: ExtensionAPI) {
 						},
 					],
 					details: makeDetails("parallel")(results),
+					usage: toTopLevelToolUsage(results),
 				};
 			}
 
@@ -702,12 +735,14 @@ export default function (pi: ExtensionAPI) {
 					return {
 						content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
 						details: makeDetails("single")([result]),
+						usage: toTopLevelToolUsage([result]),
 						isError: true,
 					};
 				}
 				return {
 					content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
 					details: makeDetails("single")([result]),
+					usage: toTopLevelToolUsage([result]),
 				};
 			}
 

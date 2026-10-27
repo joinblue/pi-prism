@@ -28,13 +28,18 @@ import {
 	resizeImage,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { clearSessionPinnedContextSummaries, getSessionPinnedContextSummary } from "./epistemic-gate.js";
 
 const DEFAULT_PROVIDER = "nvidia";
+const DEPRECATED_404_MODELS = new Set([
+	"nvidia/nemotron-3-super-120b-a12b",
+	"nvidia/nvidia/nemotron-3-super-120b-a12b",
+]);
 
 export const DEFAULT_ROLE_MODELS = {
-	orchestrator: "nvidia/nemotron-3-super-120b-a12b",
+	orchestrator: "nvidia/nemotron-3-ultra-550b-a55b",
 	scout: "z-ai/glm-5.3-flash",
-	architect: "nvidia/nemotron-3-super-120b-a12b",
+	architect: "nvidia/nemotron-3-ultra-550b-a55b",
 	challenger: "deepseek-ai/deepseek-v4.1-flash",
 	code: "poolside/laguna-xs-2.1",
 	audit: "z-ai/glm-5.3-flash",
@@ -49,16 +54,16 @@ type RouterPhase = "auto" | RoleName;
 export const ROLE_FALLBACK_CHAINS: Record<SpecialistRole, string[]> = {
 	scout: [
 		"z-ai/glm-5.3-flash",
-		"nvidia/nemotron-3.5-lightning-30b-a3b",
 		"nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/nemotron-3.5-lightning-30b-a3b",
 		"deepseek-ai/deepseek-v4.1-flash",
-		"nvidia/nemotron-3-super-120b-a12b",
+		"z-ai/glm-5.3",
 	],
 	architect: [
-		"nvidia/nemotron-3-super-120b-a12b",
 		"nvidia/nemotron-3-ultra-550b-a55b",
-		"nvidia/nemotron-3.5-lightning-30b-a3b",
 		"z-ai/glm-5.3",
+		"nvidia/nemotron-3.5-lightning-30b-a3b",
+		"deepseek-ai/deepseek-v4.1-flash",
 		"z-ai/glm-5.3-flash",
 	],
 	challenger: [
@@ -66,7 +71,6 @@ export const ROLE_FALLBACK_CHAINS: Record<SpecialistRole, string[]> = {
 		"nvidia/nemotron-3-ultra-550b-a55b",
 		"nvidia/nemotron-3.5-lightning-30b-a3b",
 		"z-ai/glm-5.3",
-		"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
 		"z-ai/glm-5.3-flash",
 	],
 	code: [
@@ -75,21 +79,20 @@ export const ROLE_FALLBACK_CHAINS: Record<SpecialistRole, string[]> = {
 		"nvidia/nemotron-3.5-lightning-30b-a3b",
 		"z-ai/glm-5.3",
 		"deepseek-ai/deepseek-v4.1-flash",
-		"z-ai/glm-5.3-flash",
 	],
 	audit: [
 		"z-ai/glm-5.3-flash",
-		"nvidia/nemotron-3.5-lightning-30b-a3b",
 		"nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/nemotron-3.5-lightning-30b-a3b",
 		"deepseek-ai/deepseek-v4.1-flash",
-		"nvidia/nemotron-3-super-120b-a12b",
+		"z-ai/glm-5.3",
 	],
 	vision: [
-		"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+		"google/diffusiongemma-26b-a4b-it",
 		"meta/llama-3.2-11b-vision-instruct",
+		"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
 		"z-ai/glm-5.3-flash",
 		"deepseek-ai/deepseek-v4.1-flash",
-		"google/diffusiongemma-26b-a4b-it",
 	],
 };
 
@@ -186,14 +189,24 @@ function loadPersistedRoleModels(): void {
 	if (!fs.existsSync(filePath)) return;
 	try {
 		const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+		let migrated404 = false;
 		for (const role of Object.keys(DEFAULT_ROLE_MODELS) as RoleName[]) {
 			if (typeof raw?.[role] === "string" && raw[role].trim()) {
-				ROLE_MODELS[role] = raw[role].trim();
+				const candidate = raw[role].trim();
+				if (DEPRECATED_404_MODELS.has(candidate)) {
+					ROLE_MODELS[role] = DEFAULT_ROLE_MODELS[role];
+					migrated404 = true;
+				} else {
+					ROLE_MODELS[role] = candidate;
+				}
 				syncAgentMarkdownModel(role, ROLE_MODELS[role]);
 			}
 		}
 		if (raw?.strategyMode === "apex-commander" || raw?.strategyMode === "hybrid-synergy") {
 			STRATEGY_MODE = raw.strategyMode;
+		}
+		if (migrated404) {
+			savePersistedRoleModels();
 		}
 	} catch {
 		// Ignore malformed file and keep defaults
@@ -214,7 +227,23 @@ function readAuthJson(): Record<string, any> {
 	const authPath = getAuthFilePath();
 	if (!fs.existsSync(authPath)) return {};
 	try {
-		return JSON.parse(fs.readFileSync(authPath, "utf-8")) ?? {};
+		const rawText = fs.readFileSync(authPath, "utf-8");
+		const parsed = JSON.parse(rawText) ?? {};
+		// Self-healing guard: if a user manually pasted multiple `"nvidia": { "key": "..." }` blocks,
+		// standard JSON.parse overwrites earlier blocks. Extract all nvapi-* keys when multiple `"nvidia"` keys exist.
+		const duplicateNvidiaBlocks = rawText.match(/"nvidia"\s*:\s*\{/g);
+		if (duplicateNvidiaBlocks && duplicateNvidiaBlocks.length > 1 && parsed.nvidia && typeof parsed.nvidia === "object") {
+			const allNvKeys = Array.from(
+				new Set((rawText.match(/nvapi-[A-Za-z0-9_-]{10,}/g) ?? []).map((k) => k.trim()).filter(Boolean)),
+			);
+			if (allNvKeys.length > 1) {
+				parsed.nvidia.keys = allNvKeys;
+				if (!parsed.nvidia.key || !allNvKeys.includes(parsed.nvidia.key)) {
+					parsed.nvidia.key = allNvKeys[0];
+				}
+			}
+		}
+		return parsed;
 	} catch {
 		return {};
 	}
@@ -229,6 +258,94 @@ function writeAuthJson(data: Record<string, any>): void {
 	} catch {
 		// Ignore chmod errors on non-POSIX filesystems
 	}
+}
+
+/**
+ * Multi-Account API Key Pool (Per-Loop Round-Robin + Sticky Key within Loop):
+ * Extracts all configured API keys for a provider from `.Friday/auth.json` (`keys: string[]` or comma-separated `key`).
+ */
+export function getProviderKeyPool(providerId: string): string[] {
+	const authData = readAuthJson();
+	const entry = authData[providerId];
+	if (!entry || typeof entry !== "object") return [];
+	const pool: string[] = [];
+	if (Array.isArray(entry.keys)) {
+		for (const k of entry.keys) {
+			if (typeof k === "string" && k.trim()) {
+				pool.push(k.trim());
+			}
+		}
+	}
+	if (typeof entry.key === "string" && entry.key.trim()) {
+		for (const part of entry.key.split(",")) {
+			const trimmed = part.trim();
+			if (trimmed && !pool.includes(trimmed)) {
+				pool.push(trimmed);
+			}
+		}
+	}
+	return pool;
+}
+
+/**
+ * Saves one or more API keys into `.Friday/auth.json` for `providerId`.
+ * When `append = true`, appends to the existing `keys` pool; otherwise replaces the pool.
+ */
+export function saveProviderKeyPool(providerId: string, rawKeysInput: string, append = false): string[] {
+	const authData = readAuthJson();
+	const incoming = rawKeysInput
+		.split(",")
+		.map((k) => k.trim())
+		.filter(Boolean);
+	const existing = append ? getProviderKeyPool(providerId) : [];
+	const merged = Array.from(new Set([...existing, ...incoming]));
+	if (merged.length === 0) return [];
+	const currentIdx = typeof authData[providerId]?.activeKeyIndex === "number" ? authData[providerId].activeKeyIndex : 0;
+	const safeIdx = currentIdx >= 0 && currentIdx < merged.length ? currentIdx : 0;
+	authData[providerId] = {
+		type: "api_key",
+		key: merged[safeIdx],
+		...(merged.length > 1 ? { keys: merged, activeKeyIndex: safeIdx } : {}),
+	};
+	writeAuthJson(authData);
+	return merged;
+}
+
+/**
+ * Acquires a Sticky Key for an entire Multi-Turn Loop (`Per-Loop Round-Robin`).
+ * Advances `activeKeyIndex` once when the loop begins and returns `selectedKey` to be passed
+ * explicitly via `options.apiKey` in `ctx.modelRegistry.complete(...)`.
+ * Keeps `authData[providerId].key` pinned to `pool[0]` so the Main Orchestrator's default key
+ * and Prefix KV Cache are NEVER disrupted by specialist key rotation (Killer 2 Fix).
+ */
+export function acquireStickyProviderKey(providerId: string): {
+	key?: string;
+	keyIndex: number;
+	poolSize: number;
+	rotated: boolean;
+} {
+	const authData = readAuthJson();
+	const entry = authData[providerId];
+	if (!entry || typeof entry !== "object") {
+		return { key: undefined, keyIndex: 0, poolSize: 0, rotated: false };
+	}
+	const pool = getProviderKeyPool(providerId);
+	if (pool.length <= 1) {
+		return { key: pool[0], keyIndex: 0, poolSize: pool.length, rotated: false };
+	}
+	const prevIdx = typeof entry.activeKeyIndex === "number" ? entry.activeKeyIndex : -1;
+	const nextIdx = (prevIdx + 1) % pool.length;
+	const selectedKey = pool[nextIdx]!;
+	const rotated = entry.activeKeyIndex !== nextIdx || entry.key !== pool[0];
+	// Pin `entry.key` to `pool[0]` for Main Orchestrator KV Cache stability; only advance `activeKeyIndex` for specialists
+	entry.key = pool[0]!;
+	entry.keys = pool;
+	entry.activeKeyIndex = nextIdx;
+	authData[providerId] = entry;
+	if (rotated) {
+		writeAuthJson(authData);
+	}
+	return { key: selectedKey, keyIndex: nextIdx, poolSize: pool.length, rotated };
 }
 
 function loadCompactIndexSummary(cwd: string): string {
@@ -559,8 +676,16 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		if (mandates.length > 0) {
+			// Prefix KV Cache Guard (Killer 1 Fix):
+			// Inject dynamic turn mandates at the TAIL of `messages` via `message` (customType: "friday-mandate", display: false)
+			// instead of mutating `event.systemPrompt` at `messages[0]` (Token 0).
+			// This keeps `messages[0]` 100% invariant across all turns and preserves the cloud Prefix KV Cache.
 			return {
-				systemPrompt: `${event.systemPrompt}\n\n${mandates.join("\n")}`,
+				message: {
+					customType: "friday-mandate",
+					content: mandates.join("\n"),
+					display: false,
+				},
 			};
 		}
 		return undefined;
@@ -718,18 +843,12 @@ export default function (pi: ExtensionAPI) {
 				}
 			}
 
-			const promptParts: string[] = [`### Task\n${params.task}`];
-			if (params.context) {
-				promptParts.push(`### Context\n${params.context}`);
-			}
-			if (attachedFileSections.length > 0) {
-				promptParts.push(`### Attached Files\n${attachedFileSections.join("\n\n")}`);
-			}
-			const userContentText = promptParts.join("\n\n");
-
-			const contentBlocks: Array<TextContent | ImageContent> = [{ type: "text", text: userContentText }];
+			const indexSummary = loadCompactIndexSummary(ctx.cwd);
+			const basePrompt = buildSpecialistSystemPrompt(role);
+			const fullSystemPrompt = indexSummary ? `${basePrompt}\n${indexSummary}` : basePrompt;
 
 			// Attach multimodal image block if `imagePath` is provided or auto-detected for `vision`
+			let imageBlock: ImageContent | undefined;
 			const candidateImagePath =
 				params.imagePath?.trim() ||
 				(role === "vision"
@@ -745,99 +864,323 @@ export default function (pi: ExtensionAPI) {
 					};
 				}
 				if (loaded.block) {
-					contentBlocks.push(loaded.block);
+					imageBlock = loaded.block;
 				}
 			} else if (role === "vision") {
 				const sessionImage = findLatestImageBlockInSession(ctx);
 				if (sessionImage) {
-					contentBlocks.push(sessionImage);
+					imageBlock = sessionImage;
 				}
 			}
 
-			const indexSummary = loadCompactIndexSummary(ctx.cwd);
-			const basePrompt = buildSpecialistSystemPrompt(role);
-			const fullSystemPrompt = indexSummary ? `${basePrompt}\n${indexSummary}` : basePrompt;
+			// Split `attachedFileSections` into progressive batches when multi-file count > 2 or total chars > 16,000.
+			// Never truncate any file content (100% full file fidelity preserved across all rounds).
+			const totalAttachedChars = attachedFileSections.reduce((acc, s) => acc + s.length, 0);
+			const fileBatches: string[][] = [];
+			if (attachedFileSections.length <= 2 && totalAttachedChars <= 16000) {
+				fileBatches.push(attachedFileSections);
+			} else {
+				let currentBatch: string[] = [];
+				let currentBatchChars = 0;
+				for (const section of attachedFileSections) {
+					if (
+						currentBatch.length >= 2 ||
+						(currentBatch.length >= 1 && currentBatchChars + section.length > 14000)
+					) {
+						fileBatches.push(currentBatch);
+						currentBatch = [];
+						currentBatchChars = 0;
+					}
+					currentBatch.push(section);
+					currentBatchChars += section.length;
+				}
+				if (currentBatch.length > 0) {
+					fileBatches.push(currentBatch);
+				}
+			}
+			const totalRounds = Math.max(1, fileBatches.length);
 
-			// M2: Iterate candidateModels with automatic fallback on ResourceExhausted / 429 / 5xx / error
+			const buildRoundUserContent = (roundIdx: number): Array<TextContent | ImageContent> => {
+				const batch = fileBatches[roundIdx] ?? [];
+				const parts: string[] = [];
+				if (totalRounds === 1) {
+					parts.push(`### Task\n${params.task}`);
+					if (params.context) {
+						parts.push(`### Context\n${params.context}`);
+					}
+					if (batch.length > 0) {
+						parts.push(`### Attached Files\n${batch.join("\n\n")}`);
+					}
+				} else if (roundIdx === 0) {
+					parts.push(`### Task (Multi-Turn Progressive File Analysis — Round 1/${totalRounds})\n${params.task}`);
+					if (params.context) {
+						parts.push(`### Context\n${params.context}`);
+					}
+					parts.push(
+						`### Attached Files (Batch 1/${totalRounds} — 100% Uncompressed Full Text)\n${batch.join("\n\n")}`,
+					);
+					parts.push(
+						`⚡ [Multi-Turn Loop Round 1/${totalRounds}] 請僅針對上述 Task 的核心目標，從本批次檔案提取最關鍵的事實筆記（嚴格限制於 8 行 / 200 字以內，禁止展開長篇分析，下一輪將繼續輸入後續檔案）。`,
+					);
+				} else if (roundIdx < totalRounds - 1) {
+					parts.push(
+						`### Attached Files (Batch ${roundIdx + 1}/${totalRounds} — 100% Uncompressed Full Text)\n${batch.join("\n\n")}`,
+					);
+					parts.push(
+						`⚡ [Multi-Turn Loop Round ${roundIdx + 1}/${totalRounds}] 請結合前一輪筆記，從本批次檔案補充與 Task 直接相關的重點筆記（嚴格限制於 8 行 / 200 字以內，下一輪將繼續輸入後續檔案）。`,
+					);
+				} else {
+					parts.push(
+						`### Attached Files (Batch ${totalRounds}/${totalRounds} — 100% Uncompressed Full Text)\n${batch.join("\n\n")}`,
+					);
+					parts.push(
+						`🎯 [Multi-Turn Loop Final Round ${totalRounds}/${totalRounds}] 所有附加檔案 (${attachedFileSections.length} 檔) 已完整輸入完畢！請綜合前面所有輪次的完整檔案內容與你的跨輪次推理筆記，完整回答最初的 Task：\n${params.task}`,
+					);
+				}
+				const blocks: Array<TextContent | ImageContent> = [{ type: "text", text: parts.join("\n\n") }];
+				if (roundIdx === 0 && imageBlock) {
+					blocks.push(imageBlock);
+				}
+				return blocks;
+			};
+
+			const isRateLimit429 = (reason: string): boolean =>
+				/\b429\b|rate[_\s-]?limit|resource[_\s-]?exhausted|too many requests|quota/i.test(reason);
+
+			const sleepWithSignal = (ms: number, abortSig?: AbortSignal): Promise<void> =>
+				new Promise((resolve, reject) => {
+					if (abortSig?.aborted) {
+						reject(new Error("Aborted"));
+						return;
+					}
+					const timer = setTimeout(resolve, ms);
+					if (abortSig) {
+						abortSig.addEventListener(
+							"abort",
+							() => {
+								clearTimeout(timer);
+								reject(new Error("Aborted"));
+							},
+							{ once: true },
+						);
+					}
+				});
+
+			// M2 + Router v2: Iterate candidateModels with Per-Loop Sticky Key, Multi-Turn Progressive Loop,
+			// In-Place 429 Exponential Backoff Wait (preserves Prefix KV Cache), Per-Round Checkpoint Preservation
+			// (never discards completed intermediate rounds when a later round times out), and fast failover on 404/5xx
 			const fallbackErrors: string[] = [];
 			let lastAssistantMsg: any = null;
 			let selectedModel = candidateModels[0]!;
+			const conversationMessages: any[] = [];
+			const roundNotes: string[] = [];
+			let completedRoundIdx = 0;
+
+			// Top-Level Usage Accumulator (Killer 4 Fix):
+			// Sums token usage & cost across all multi-turn rounds so `/session` and `/context` reflect 100% of specialist consumption.
+			const aggregatedUsage = {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					total: 0,
+				},
+			};
+			const accumulateAssistantUsage = (u: any) => {
+				if (!u || typeof u !== "object") return;
+				const inp = Number(u.input ?? 0) || 0;
+				const out = Number(u.output ?? 0) || 0;
+				const cr = Number(u.cacheRead ?? 0) || 0;
+				const cw = Number(u.cacheWrite ?? 0) || 0;
+				const tot = Number(u.totalTokens ?? inp + out + cr + cw) || inp + out + cr + cw;
+				aggregatedUsage.input += inp;
+				aggregatedUsage.output += out;
+				aggregatedUsage.cacheRead += cr;
+				aggregatedUsage.cacheWrite += cw;
+				aggregatedUsage.totalTokens += tot;
+				if (u.cost && typeof u.cost === "object") {
+					aggregatedUsage.cost.input += Number(u.cost.input ?? 0) || 0;
+					aggregatedUsage.cost.output += Number(u.cost.output ?? 0) || 0;
+					aggregatedUsage.cost.cacheRead += Number(u.cost.cacheRead ?? 0) || 0;
+					aggregatedUsage.cost.cacheWrite += Number(u.cost.cacheWrite ?? 0) || 0;
+					aggregatedUsage.cost.total += Number(u.cost.total ?? 0) || 0;
+				} else if (typeof u.cost === "number") {
+					aggregatedUsage.cost.total += u.cost;
+				}
+			};
 
 			for (let i = 0; i < candidateModels.length; i++) {
 				const candidate = candidateModels[i]!;
 				selectedModel = candidate;
-				const candidateSignal = signal
-					? AbortSignal.any([signal, AbortSignal.timeout(10000)])
-					: AbortSignal.timeout(10000);
-				try {
-					const assistantMsg = await ctx.modelRegistry.complete(
-						candidate,
-						{
-							systemPrompt: fullSystemPrompt,
-							messages: [
-								{
-									role: "user",
-									content: contentBlocks,
-									timestamp: Date.now(),
-								},
-							],
-						},
-						{ signal: candidateSignal },
-					);
-					lastAssistantMsg = assistantMsg;
-					const textBlocks = assistantMsg.content
-						.filter((b): b is { type: "text"; text: string } => b.type === "text")
-						.map((b) => b.text);
-					const thinkingBlocks = (assistantMsg.content as any[])
-						.filter((b) => b?.type === "thinking" && typeof b.thinking === "string")
-						.map((b) => b.thinking);
-					const outputText = textBlocks.join("\n").trim() || thinkingBlocks.join("\n").trim();
-					const isErr = assistantMsg.stopReason === "error" || Boolean(assistantMsg.errorMessage);
 
-					if (!isErr && outputText) {
-						const fallbackNotice =
-							i > 0
-								? `⚡ *[Auto-Fallback Triggered: ${fallbackErrors.join(" | ")} -> Switched to ${candidate.provider}/${candidate.id}]*\n\n`
-								: "";
-						return {
-							content: [
+				// Acquire a Sticky Key once for the entire Multi-Turn Loop and pass it explicitly via `options.apiKey`
+				// without calling `ctx.modelRegistry.refresh()` or mutating the Main Orchestrator's default key (Killer 2 Fix).
+				const stickyKeyInfo = acquireStickyProviderKey(candidate.provider);
+
+				let candidateFailed = false;
+				let finalOutputText = "";
+
+				for (let roundIdx = completedRoundIdx; roundIdx < totalRounds; roundIdx++) {
+					const roundBlocks = buildRoundUserContent(roundIdx);
+					conversationMessages.push({
+						role: "user",
+						content: roundBlocks,
+						timestamp: Date.now(),
+					});
+
+					const backoffScheduleMs = [5000, 10000];
+					let roundSucceeded = false;
+					const isIntermediateRound = totalRounds > 1 && roundIdx < totalRounds - 1;
+
+					for (let attempt = 0; attempt <= backoffScheduleMs.length; attempt++) {
+						const hasHeavyPayload = attachedFileSections.length > 0 || Boolean(imageBlock);
+						const perRoundTimeoutMs = isIntermediateRound || !hasHeavyPayload ? 22000 : 38000;
+						const candidateSignal = signal
+							? AbortSignal.any([signal, AbortSignal.timeout(perRoundTimeoutMs)])
+							: AbortSignal.timeout(perRoundTimeoutMs);
+
+						try {
+							const assistantMsg = await ctx.modelRegistry.complete(
+								candidate,
 								{
-									type: "text",
-									text: `🤖 **[Specialist: ${role} | Model: ${candidate.provider}/${candidate.id}]**\n\n${fallbackNotice}${outputText}`,
+									systemPrompt: fullSystemPrompt,
+									messages: conversationMessages,
 								},
-							],
-							details: {
-								specialist: role,
-								model: `${candidate.provider}/${candidate.id}`,
-								fallbackAttempts: i,
-								stopReason: assistantMsg.stopReason,
-								usage: assistantMsg.usage,
-							},
-							isError: false,
-						};
+								{
+									signal: candidateSignal,
+									...(stickyKeyInfo.key ? { apiKey: stickyKeyInfo.key } : {}),
+									...(isIntermediateRound ? { maxTokens: 768 } : {}),
+								},
+							);
+							lastAssistantMsg = assistantMsg;
+							accumulateAssistantUsage(assistantMsg?.usage);
+							const textBlocks = assistantMsg.content
+								.filter((b): b is { type: "text"; text: string } => b.type === "text")
+								.map((b) => b.text);
+							const thinkingBlocks = (assistantMsg.content as any[])
+								.filter((b) => b?.type === "thinking" && typeof b.thinking === "string")
+								.map((b) => b.thinking);
+							const outputText = textBlocks.join("\n").trim() || thinkingBlocks.join("\n").trim();
+							const isErr = assistantMsg.stopReason === "error" || Boolean(assistantMsg.errorMessage);
+
+							if (!isErr && outputText) {
+								// Push clean assistant text message (strip bulky internal thinking blocks across turns
+								// to keep multi-turn payload compact and compatible with all OpenAI-style NIM endpoints)
+								conversationMessages.push({
+									role: "assistant",
+									content: [{ type: "text", text: outputText }],
+									timestamp: Date.now(),
+								});
+								finalOutputText = outputText;
+								if (isIntermediateRound) {
+									roundNotes.push(`**[Round ${roundIdx + 1}/${totalRounds} Notes]**\n${outputText}`);
+								}
+								completedRoundIdx = roundIdx + 1;
+								roundSucceeded = true;
+								break;
+							}
+
+							const errReason =
+								assistantMsg.errorMessage || `stopReason=${assistantMsg.stopReason} (empty output)`;
+							if (isRateLimit429(errReason) && attempt < backoffScheduleMs.length) {
+								await sleepWithSignal(backoffScheduleMs[attempt]!, signal);
+								continue;
+							}
+							fallbackErrors.push(
+								`${candidate.provider}/${candidate.id} (round ${roundIdx + 1}/${totalRounds}): ${errReason}`,
+							);
+							break;
+						} catch (err: any) {
+							const errMsg = err?.message ?? String(err);
+							if (isRateLimit429(errMsg) && attempt < backoffScheduleMs.length) {
+								try {
+									await sleepWithSignal(backoffScheduleMs[attempt]!, signal);
+									continue;
+								} catch {
+									// Aborted by parent signal
+								}
+							}
+							fallbackErrors.push(
+								`${candidate.provider}/${candidate.id} (round ${roundIdx + 1}/${totalRounds}): ${errMsg}`,
+							);
+							break;
+						}
 					}
 
-					const errReason = assistantMsg.errorMessage || `stopReason=${assistantMsg.stopReason} (empty output)`;
-					fallbackErrors.push(`${candidate.provider}/${candidate.id}: ${errReason}`);
-				} catch (err: any) {
-					fallbackErrors.push(`${candidate.provider}/${candidate.id}: ${err?.message ?? String(err)}`);
+					if (!roundSucceeded) {
+						// Pop the uncompleted user prompt so the next fallback candidate resumes cleanly from completedRoundIdx
+						conversationMessages.pop();
+						candidateFailed = true;
+						break;
+					}
+				}
+
+				if (!candidateFailed && finalOutputText) {
+					const fallbackNotice =
+						fallbackErrors.length > 0
+							? `⚡ *[Auto-Fallback Triggered: ${fallbackErrors.join(" | ")} -> Completed by ${candidate.provider}/${candidate.id}]*\n\n`
+							: "";
+					const loopBadge =
+						totalRounds > 1
+							? ` | Multi-Turn Loop: ${totalRounds} rounds (${attachedFileSections.length} files)`
+							: "";
+					const keyBadge =
+						stickyKeyInfo.poolSize > 1
+							? ` | StickyKey #${stickyKeyInfo.keyIndex + 1}/${stickyKeyInfo.poolSize}`
+							: "";
+					return {
+						content: [
+							{
+								type: "text",
+								text: `🤖 **[Specialist: ${role} | Model: ${candidate.provider}/${candidate.id}${loopBadge}${keyBadge}]**\n\n${fallbackNotice}${finalOutputText}`,
+							},
+						],
+						details: {
+							specialist: role,
+							model: `${candidate.provider}/${candidate.id}`,
+							multiTurnRounds: totalRounds,
+							attachedFileCount: attachedFileSections.length,
+							stickyKeyIndex: stickyKeyInfo.keyIndex,
+							keyPoolSize: stickyKeyInfo.poolSize,
+							intermediateRoundNotes: roundNotes,
+							fallbackAttempts: i,
+							stopReason: lastAssistantMsg?.stopReason,
+							usage: aggregatedUsage,
+						},
+						usage: aggregatedUsage,
+						isError: false,
+					};
 				}
 			}
 
 			const errorSummary = fallbackErrors.join("\n- ");
+			const partialNotesSuffix =
+				roundNotes.length > 0
+					? `\n\n📌 **[Preserved Intermediate Notes (${completedRoundIdx}/${totalRounds} rounds completed before timeout)]**\n${roundNotes.join("\n\n")}`
+					: "";
 			return {
 				content: [
 					{
 						type: "text",
-						text: `❌ **[Specialist: ${role} | All Candidate Models Exhausted]**\n- ${errorSummary}`,
+						text: `❌ **[Specialist: ${role} | All Candidate Models Exhausted]**\n- ${errorSummary}${partialNotesSuffix}`,
 					},
 				],
 				details: {
 					specialist: role,
 					model: `${selectedModel.provider}/${selectedModel.id}`,
 					fallbackErrors,
+					completedRounds: completedRoundIdx,
+					intermediateRoundNotes: roundNotes,
 					stopReason: lastAssistantMsg?.stopReason ?? "error",
+					usage: aggregatedUsage,
 				},
+				usage: aggregatedUsage,
 				isError: true,
 			};
 		},
@@ -846,7 +1189,14 @@ export default function (pi: ExtensionAPI) {
 	function formatStatusSummary(ctx: ExtensionContext): string {
 		loadPersistedRoleModels();
 		const authData = readAuthJson();
-		const configuredProviders = Object.keys(authData);
+		const configuredProviders = Object.keys(authData).map((prov) => {
+			const pool = getProviderKeyPool(prov);
+			if (pool.length > 1) {
+				const activeIdx = typeof authData[prov]?.activeKeyIndex === "number" ? authData[prov].activeKeyIndex : 0;
+				return `${prov} (${pool.length} keys, Sticky #${activeIdx + 1})`;
+			}
+			return prov;
+		});
 		const lines: string[] = [
 			`🧠 Friday 路由與角色模型配置 (鎖定模式: ${forcedMode.toUpperCase()} | 調度策略: ${STRATEGY_MODE})`,
 			`──────────────────────────────────────────────────`,
@@ -868,7 +1218,8 @@ export default function (pi: ExtensionAPI) {
 		lines.push(`  • /mode                                         : 開啟互動式設定選單`);
 		lines.push(`  • /mode strategy <apex-commander|hybrid-synergy>: 切換雙調度策略模式`);
 		lines.push(`  • /mode set <角色> <模型>                       : 例 /mode set orchestrator google-vertex/gemini-4-argon`);
-		lines.push(`  • /mode key <provider> <APIKey>                 : 例 /mode key anthropic sk-ant-...`);
+		lines.push(`  • /mode key <provider> <Key1,Key2,...>          : 設定單一或多帳號輪詢金鑰池 (Per-Loop Sticky Round-Robin)`);
+		lines.push(`  • /mode key add <provider> <NewAPIKey>          : 追加新帳號 API Key 至該 Provider 輪詢池`);
 		lines.push(`  • /mode vertex <ProjectID> [區]                 : 例 /mode vertex my-gcp-project global`);
 		lines.push(`  • /mode <auto|角色名稱>                         : 切換自動路由或強制鎖定單一角色`);
 		return lines.join("\n");
@@ -1153,17 +1504,32 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			const keyInput = await ctx.ui.input(`請輸入 [${providerId}] 的 API Key (將加密權限 600 存入 .Friday/auth.json):`);
+			const existingPool = getProviderKeyPool(providerId);
+			let appendMode = false;
+			if (existingPool.length > 0) {
+				const keyAction = await scrollableSelect(
+					ctx,
+					`[${providerId}] 目前已設定 ${existingPool.length} 組 API Key，請選擇操作方式:`,
+					[
+						`➕ 追加新帳號 API Key 至輪詢池 (目前 ${existingPool.length} 組，支援 Per-Loop Sticky Round-Robin)`,
+						"🔄 覆寫替換全部 API Key (可輸入單組或以逗號分隔多組 Key1,Key2,...)",
+					],
+				);
+				if (!keyAction) return;
+				appendMode = keyAction.startsWith("➕");
+			}
+
+			const keyInput = await ctx.ui.input(
+				`請輸入 [${providerId}] 的 API Key (可輸入單組或以逗號分隔多組 Key1,Key2，權限 600 存入 .Friday/auth.json):`,
+			);
 			if (!keyInput?.trim()) return;
 
-			const authData = readAuthJson();
-			authData[providerId] = {
-				type: "api_key",
-				key: keyInput.trim(),
-			};
-			writeAuthJson(authData);
+			const pool = saveProviderKeyPool(providerId, keyInput.trim(), appendMode);
 			await ctx.modelRegistry.refresh();
-			ctx.ui.notify(`✅ 已儲存 [${providerId}] API Key 至 .Friday/auth.json 並重新載入可用模型！`, "info");
+			ctx.ui.notify(
+				`✅ 已儲存 [${providerId}] 金鑰池 (共 ${pool.length} 組 API Key，Per-Loop Sticky Round-Robin 已啟用) 至 .Friday/auth.json！`,
+				"info",
+			);
 			return;
 		}
 
@@ -1224,14 +1590,15 @@ export default function (pi: ExtensionAPI) {
 			STRATEGY_MODE = "apex-commander";
 			savePersistedRoleModels();
 			forcedMode = "auto";
-			ctx.ui.setStatus("friday-router", "🧠 [ORCHESTRATOR] nemotron-3-super-120b-a12b");
+			const defaultOrchShort = DEFAULT_ROLE_MODELS.orchestrator.split("/").pop() ?? DEFAULT_ROLE_MODELS.orchestrator;
+			ctx.ui.setStatus("friday-router", `🧠 [ORCHESTRATOR] ${defaultOrchShort}`);
 			ctx.ui.notify("✅ 已重設所有角色為預設極速模型池，並恢復 AUTO 與 apex-commander 模式。", "info");
 		}
 	}
 
 	pi.registerCommand("mode", {
 		description:
-			"Friday 路由、各角色模型綁定、調度策略與憑證管理: /mode | /mode strategy <apex-commander|hybrid-synergy> | /mode set <role> <model> | /mode key <provider> <key> | /mode vertex <project> [loc] | /mode status",
+			"Friday 路由、各角色模型綁定、調度策略與憑證管理: /mode | /mode strategy <apex-commander|hybrid-synergy> | /mode set <role> <model> | /mode key [add] <provider> <key1,key2,...> | /mode vertex <project> [loc] | /mode status",
 		handler: async (args, ctx) => {
 			loadPersistedRoleModels();
 			const tokens = args
@@ -1240,8 +1607,8 @@ export default function (pi: ExtensionAPI) {
 				.filter(Boolean);
 			const sub = tokens[0]?.toLowerCase();
 
-			// 1. No args or "/mode config" -> open interactive menu if UI is available, else show status
-			if (!sub || sub === "config" || sub === "menu") {
+			// 1. No args -> open interactive menu if UI is available, else show status
+			if (!sub) {
 				if (ctx.hasUI) {
 					await openInteractiveModeMenu(ctx);
 				} else {
@@ -1250,8 +1617,8 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			// 2. "/mode status" or "/mode list"
-			if (sub === "status" || sub === "list") {
+			// 2. "/mode status"
+			if (sub === "status") {
 				ctx.ui.notify(formatStatusSummary(ctx), "info");
 				return;
 			}
@@ -1281,7 +1648,8 @@ export default function (pi: ExtensionAPI) {
 				STRATEGY_MODE = "apex-commander";
 				savePersistedRoleModels();
 				forcedMode = "auto";
-				ctx.ui.setStatus("friday-router", "🧠 [ORCHESTRATOR] nemotron-3-super-120b-a12b");
+				const defaultOrchShort = DEFAULT_ROLE_MODELS.orchestrator.split("/").pop() ?? DEFAULT_ROLE_MODELS.orchestrator;
+				ctx.ui.setStatus("friday-router", `🧠 [ORCHESTRATOR] ${defaultOrchShort}`);
 				ctx.ui.notify("✅ 已重設所有角色為預設模型池。", "info");
 				return;
 			}
@@ -1302,25 +1670,27 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			// 6. "/mode key <provider> <apiKey>"
+			// 6. "/mode key [add] <provider> <apiKey1,apiKey2,...>"
 			if (sub === "key") {
-				const providerId = tokens[1]?.toLowerCase();
-				const apiKey = tokens.slice(2).join(" ").trim();
+				const isAdd = tokens[1]?.toLowerCase() === "add";
+				const providerId = (isAdd ? tokens[2] : tokens[1])?.toLowerCase();
+				const apiKey = tokens
+					.slice(isAdd ? 3 : 2)
+					.join(" ")
+					.trim();
 				if (!providerId || !apiKey) {
 					ctx.ui.notify(
-						"❌ 用法: /mode key <provider> <apiKey>\n範例: /mode key anthropic sk-ant-...",
+						"❌ 用法: /mode key [add] <provider> <Key1,Key2,...>\n範例: /mode key nvidia nvapi-1,nvapi-2 或 /mode key add nvidia nvapi-3",
 						"warning",
 					);
 					return;
 				}
-				const authData = readAuthJson();
-				authData[providerId] = {
-					type: "api_key",
-					key: apiKey,
-				};
-				writeAuthJson(authData);
+				const pool = saveProviderKeyPool(providerId, apiKey, isAdd);
 				await ctx.modelRegistry.refresh();
-				ctx.ui.notify(`✅ 已將 [${providerId}] API Key 安全存入 .Friday/auth.json (權限 600) 並更新模型池！`, "info");
+				ctx.ui.notify(
+					`✅ 已將 [${providerId}] API Key 安全存入 .Friday/auth.json (權限 600，金鑰池共 ${pool.length} 組，Per-Loop Sticky Round-Robin 已啟用)！`,
+					"info",
+				);
 				return;
 			}
 
@@ -1381,6 +1751,448 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.setStatus("friday-router", `🧠 [LOCK:${forcedMode.toUpperCase()}] ${targetId.split("/").pop()}`);
 				ctx.ui.notify(`✅ 已鎖定路由模式為 [${forcedMode.toUpperCase()}] -> ${targetId}`, "info");
 			}
+		},
+	});
+
+	function estimateStringTokens(text: string): number {
+		if (!text) return 0;
+		return Math.ceil(text.length / 3.8);
+	}
+
+	function extractMessageCharsAndThinking(msg: any): { textChars: number; thinkingChars: number; toolCallChars: number } {
+		let textChars = 0;
+		let thinkingChars = 0;
+		let toolCallChars = 0;
+		if (!msg) return { textChars, thinkingChars, toolCallChars };
+		if (typeof msg.content === "string") {
+			textChars += msg.content.length;
+			return { textChars, thinkingChars, toolCallChars };
+		}
+		if (Array.isArray(msg.content)) {
+			for (const b of msg.content) {
+				if (!b || typeof b !== "object") continue;
+				if (b.type === "text" && typeof b.text === "string") {
+					textChars += b.text.length;
+				} else if (b.type === "thinking" && typeof b.thinking === "string") {
+					thinkingChars += b.thinking.length;
+				} else if (b.type === "toolCall") {
+					toolCallChars += JSON.stringify(b.arguments ?? {}).length + String(b.name ?? "").length;
+				} else if (b.type === "image" && typeof b.data === "string") {
+					textChars += Math.min(4800, b.data.length);
+				}
+			}
+		}
+		return { textChars, thinkingChars, toolCallChars };
+	}
+
+	function formatTok(n: number): string {
+		if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+		if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+		return String(Math.round(n));
+	}
+
+	function buildContextTelemetryReport(
+		ctx: ExtensionContext,
+		viewMode: "all" | "turns" | "tools" | "json" = "all",
+	): string {
+		loadPersistedRoleModels();
+		const ctxUsage = ctx.getContextUsage?.() ?? { tokens: 0, contextWindow: 262_144, percent: 0 };
+		const sysPrompt = ctx.getSystemPrompt?.() ?? "";
+		const sessionKey = `${ctx.sessionManager?.getSessionId?.() ?? "default"}::${ctx.cwd}`;
+		const pinnedIndex = getSessionPinnedContextSummary(sessionKey, ctx.cwd, false) ?? "";
+
+		const sysBaseTokens = estimateStringTokens(sysPrompt);
+		const sysIndexTokens = estimateStringTokens(pinnedIndex);
+		const sysTotalTokens = sysBaseTokens + sysIndexTokens;
+
+		const branchEntries: any[] = ctx.sessionManager?.getBranch?.() ?? [];
+		const allEntries: any[] = ctx.sessionManager?.getEntries?.() ?? branchEntries;
+
+		let userTokensEst = 0;
+		let mandateCount = 0;
+		let assistantTextTokensEst = 0;
+		let thinkingTokensEst = 0;
+		let toolCallTokensEst = 0;
+		let toolResultTokensEst = 0;
+
+		const toolCallInputsById = new Map<string, { name: string; preview: string }>();
+		const heavyToolResults: Array<{
+			toolName: string;
+			preview: string;
+			estTokens: number;
+			chars: number;
+			isOffload: boolean;
+		}> = [];
+
+		for (const entry of branchEntries) {
+			if (entry?.type === "custom_message" && entry.customType === "friday-mandate") {
+				mandateCount++;
+				userTokensEst += estimateStringTokens(String(entry.content ?? ""));
+				continue;
+			}
+			if (entry?.type !== "message" || !entry.message) continue;
+			const msg = entry.message;
+			const { textChars, thinkingChars, toolCallChars } = extractMessageCharsAndThinking(msg);
+
+			if (msg.role === "user" || msg.role === "custom") {
+				if (msg.customType === "friday-mandate") mandateCount++;
+				userTokensEst += Math.ceil(textChars / 3.8);
+			} else if (msg.role === "assistant") {
+				assistantTextTokensEst += Math.ceil(textChars / 3.8);
+				thinkingTokensEst += Math.ceil(thinkingChars / 3.8);
+				toolCallTokensEst += Math.ceil(toolCallChars / 3.8);
+				if (Array.isArray(msg.content)) {
+					for (const b of msg.content) {
+						if (b?.type === "toolCall" && b.id) {
+							const args = (b.arguments ?? {}) as Record<string, any>;
+							const targetHint =
+								args.path ||
+								args.imagePath ||
+								(Array.isArray(args.filePaths) ? args.filePaths.join(",") : "") ||
+								args.specialist ||
+								args.agent ||
+								args.command ||
+								args.task ||
+								"";
+							const cleanHint = String(targetHint).replace(/\s+/g, " ").trim().slice(0, 46);
+							toolCallInputsById.set(String(b.id), {
+								name: String(b.name ?? "tool"),
+								preview: cleanHint,
+							});
+						}
+					}
+				}
+			} else if (msg.role === "toolResult") {
+				const est = Math.ceil(textChars / 3.8);
+				toolResultTokensEst += est;
+				const meta = toolCallInputsById.get(String(msg.toolCallId ?? ""));
+				const tName = String(msg.toolName ?? meta?.name ?? "tool");
+				const preview = meta?.preview || tName;
+				heavyToolResults.push({
+					toolName: tName,
+					preview,
+					estTokens: est,
+					chars: textChars,
+					isOffload: tName === "dispatch_specialist" || tName === "subagent",
+				});
+			}
+		}
+
+		heavyToolResults.sort((a, b) => b.estTokens - a.estTokens);
+		const topHeavyTools = heavyToolResults.slice(0, 5);
+
+		// Panel 2 & 3: Scan all session entries for Main Brain turns vs Specialist / Subagent tool calls
+		interface TurnForensicRow {
+			turnNum: number;
+			model: string;
+			input: number;
+			cacheRead: number;
+			cacheWrite: number;
+			output: number;
+			hitRatePct: number;
+			deltaSec: number | null;
+			diagnosis: string;
+		}
+		const turnRows: TurnForensicRow[] = [];
+		let prevTurnTs: number | null = null;
+		let prevTurnModel: string | null = null;
+
+		const mainTotals = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+		const specialistTotals = { calls: 0, rounds: 0, filesOffloaded: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+		const subagentTotals = { calls: 0, steps: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+
+		for (const entry of allEntries) {
+			if (entry?.type !== "message" || !entry.message) continue;
+			const msg = entry.message;
+
+			if (msg.role === "assistant" && msg.usage) {
+				mainTotals.calls++;
+				const u = msg.usage;
+				const inp = Number(u.input ?? 0) || 0;
+				const out = Number(u.output ?? 0) || 0;
+				const cr = Number(u.cacheRead ?? 0) || 0;
+				const cw = Number(u.cacheWrite ?? 0) || 0;
+				const costVal = typeof u.cost === "object" ? Number(u.cost?.total ?? 0) || 0 : Number(u.cost ?? 0) || 0;
+
+				mainTotals.input += inp;
+				mainTotals.output += out;
+				mainTotals.cacheRead += cr;
+				mainTotals.cacheWrite += cw;
+				mainTotals.cost += costVal;
+
+				const promptSide = inp + cr + cw;
+				const hitPct = promptSide > 0 ? (cr / promptSide) * 100 : 0;
+				const ts = typeof msg.timestamp === "number" ? msg.timestamp : entry.timestamp ? Date.parse(entry.timestamp) : null;
+				const deltaSec = prevTurnTs !== null && ts !== null && !Number.isNaN(ts) ? Math.max(0, Math.round((ts - prevTurnTs) / 1000)) : null;
+				const modelLabel = `${msg.provider ?? ""}/${msg.model ?? "unknown"}`.replace(/^\//, "");
+
+				let diagnosis = "🟢 CACHE_HIT";
+				if (turnRows.length === 0) {
+					diagnosis = cr > 0 ? "🟢 WARM_START_HIT" : "❄️ COLD_START (Turn 1)";
+				} else if (cr > 0 && hitPct >= 50) {
+					diagnosis = "🟢 CACHE_HIT";
+				} else if (cr > 0 && hitPct < 50) {
+					diagnosis = "🟡 PARTIAL_HIT";
+				} else if (prevTurnModel && prevTurnModel !== modelLabel) {
+					diagnosis = "🔄 MODEL_SWITCH";
+				} else if (deltaSec !== null && deltaSec > 300) {
+					diagnosis = `⏰ TTL_EXPIRED (${deltaSec}s > 5m)`;
+				} else {
+					diagnosis = "⚠️ CACHE_MISS / NO_PROVIDER_CACHE";
+				}
+
+				turnRows.push({
+					turnNum: turnRows.length + 1,
+					model: modelLabel.split("/").pop() ?? modelLabel,
+					input: inp,
+					cacheRead: cr,
+					cacheWrite: cw,
+					output: out,
+					hitRatePct: hitPct,
+					deltaSec,
+					diagnosis,
+				});
+
+				if (ts !== null && !Number.isNaN(ts)) prevTurnTs = ts;
+				prevTurnModel = modelLabel;
+			} else if (msg.role === "toolResult") {
+				const tName = String(msg.toolName ?? "");
+				const u = msg.usage ?? msg.details?.usage;
+				if (tName === "dispatch_specialist") {
+					specialistTotals.calls++;
+					specialistTotals.rounds += Number(msg.details?.multiTurnRounds ?? 1) || 1;
+					specialistTotals.filesOffloaded += Number(msg.details?.attachedFileCount ?? 0) || 0;
+					if (u && typeof u === "object") {
+						specialistTotals.input += Number(u.input ?? 0) || 0;
+						specialistTotals.output += Number(u.output ?? 0) || 0;
+						specialistTotals.cacheRead += Number(u.cacheRead ?? 0) || 0;
+						specialistTotals.cacheWrite += Number(u.cacheWrite ?? 0) || 0;
+						specialistTotals.cost +=
+							typeof u.cost === "object" ? Number(u.cost?.total ?? 0) || 0 : Number(u.cost ?? 0) || 0;
+					}
+				} else if (tName === "subagent") {
+					subagentTotals.calls++;
+					const resultsArr = Array.isArray(msg.details?.results) ? msg.details.results : [];
+					subagentTotals.steps += Math.max(1, resultsArr.length);
+					if (u && typeof u === "object") {
+						subagentTotals.input += Number(u.input ?? 0) || 0;
+						subagentTotals.output += Number(u.output ?? 0) || 0;
+						subagentTotals.cacheRead += Number(u.cacheRead ?? 0) || 0;
+						subagentTotals.cacheWrite += Number(u.cacheWrite ?? 0) || 0;
+						subagentTotals.cost +=
+							typeof u.cost === "object" ? Number(u.cost?.total ?? 0) || 0 : Number(u.cost ?? 0) || 0;
+					} else {
+						for (const r of resultsArr) {
+							subagentTotals.input += Number(r?.usage?.input ?? 0) || 0;
+							subagentTotals.output += Number(r?.usage?.output ?? 0) || 0;
+							subagentTotals.cacheRead += Number(r?.usage?.cacheRead ?? 0) || 0;
+							subagentTotals.cacheWrite += Number(r?.usage?.cacheWrite ?? 0) || 0;
+							subagentTotals.cost += Number(r?.usage?.cost ?? 0) || 0;
+						}
+					}
+				}
+			}
+		}
+
+		const mainPromptTotal = mainTotals.input + mainTotals.cacheRead + mainTotals.cacheWrite;
+		const mainCacheHitPct = mainPromptTotal > 0 ? (mainTotals.cacheRead / mainPromptTotal) * 100 : 0;
+		const specPromptTotal = specialistTotals.input + specialistTotals.cacheRead + specialistTotals.cacheWrite;
+		const specCacheHitPct = specPromptTotal > 0 ? (specialistTotals.cacheRead / specPromptTotal) * 100 : 0;
+		const subPromptTotal = subagentTotals.input + subagentTotals.cacheRead + subagentTotals.cacheWrite;
+		const subCacheHitPct = subPromptTotal > 0 ? (subagentTotals.cacheRead / subPromptTotal) * 100 : 0;
+
+		const mainTotalTokens = mainPromptTotal + mainTotals.output;
+		const offloadedTotalTokens =
+			specPromptTotal + specialistTotals.output + subPromptTotal + subagentTotals.output;
+		const grandTotalTokens = mainTotalTokens + offloadedTotalTokens;
+		const offloadRatioPct = grandTotalTokens > 0 ? (offloadedTotalTokens / grandTotalTokens) * 100 : 0;
+
+		if (viewMode === "json") {
+			return JSON.stringify(
+				{
+					strategyMode: STRATEGY_MODE,
+					orchestratorModel: ROLE_MODELS.orchestrator,
+					kvCacheGuards: {
+						tailMandateInjection: true,
+						nonDisruptiveStickyKey: true,
+						sessionPinnedContextIndex: true,
+						topLevelToolUsageAggregation: true,
+					},
+					contextWindow: {
+						activeTokens: ctxUsage.tokens ?? 0,
+						maxWindow: ctxUsage.contextWindow ?? 262_144,
+						percent: Number((ctxUsage.percent ?? 0).toFixed(2)),
+						anatomyEstimatedTokens: {
+							systemPromptBase: sysBaseTokens,
+							sessionPinnedContextIndex: sysIndexTokens,
+							userAndMandates: userTokensEst,
+							assistantText: assistantTextTokensEst,
+							thinking: thinkingTokensEst,
+							toolCalls: toolCallTokensEst,
+							toolResults: toolResultTokensEst,
+						},
+						topHeavyToolResults: topHeavyTools,
+					},
+					offloadMatrix: {
+						mainOrchestrator: { ...mainTotals, cacheHitPct: Number(mainCacheHitPct.toFixed(1)) },
+						dispatchSpecialist: { ...specialistTotals, cacheHitPct: Number(specCacheHitPct.toFixed(1)) },
+						subagent: { ...subagentTotals, cacheHitPct: Number(subCacheHitPct.toFixed(1)) },
+						offloadRatioPct: Number(offloadRatioPct.toFixed(1)),
+					},
+					perTurnForensics: turnRows,
+				},
+				null,
+				2,
+			);
+		}
+
+		const outLines: string[] = [
+			`📊 Friday Context 結構、Token 消耗與 KV Cache 鑑識儀表板 (/context)`,
+			`════════════════════════════════════════════════════════════════════════`,
+			`🧠 主腦模型: ${ROLE_MODELS.orchestrator} | 策略: ${STRATEGY_MODE} | KV Cache 四大物理防護: ✅ 已啟用`,
+		];
+
+		if (viewMode === "all" || viewMode === "tools") {
+			const estSum =
+				sysTotalTokens +
+				userTokensEst +
+				assistantTextTokensEst +
+				thinkingTokensEst +
+				toolCallTokensEst +
+				toolResultTokensEst;
+			const actualTokens = ctxUsage.tokens ?? estSum;
+			const winMax = ctxUsage.contextWindow || 262_144;
+			const winPct = ((actualTokens / winMax) * 100).toFixed(1);
+
+			outLines.push(``);
+			outLines.push(
+				`【Panel 1】Active Context Window 結構解剖 (目前視窗: ${formatTok(actualTokens)} / ${formatTok(winMax)} tokens, ${winPct}%)`,
+			);
+			outLines.push(`────────────────────────────────────────────────────────────────────────`);
+			outLines.push(
+				`  • System Prompt (AGENTS.md + 工具宣告)       : ~${formatTok(sysBaseTokens).padStart(7, " ")} tok (Token 0 固定前綴)`,
+			);
+			outLines.push(
+				`  • Session-Pinned CONTEXT_INDEX 單行索引      : ~${formatTok(sysIndexTokens).padStart(7, " ")} tok (釘選防突變 ✅)`,
+			);
+			outLines.push(
+				`  • User Prompts + 尾端隱形 Mandate (${mandateCount} 次)   : ~${formatTok(userTokensEst).padStart(7, " ")} tok (尾端注入不破快取 ✅)`,
+			);
+			outLines.push(
+				`  • Assistant 回應與 Tool Call 參數            : ~${formatTok(assistantTextTokensEst + toolCallTokensEst).padStart(7, " ")} tok`,
+			);
+			outLines.push(
+				`  • Thinking 深度推理區塊                      : ~${formatTok(thinkingTokensEst).padStart(7, " ")} tok`,
+			);
+			outLines.push(
+				`  • Tool Results 工具回傳內容 (${heavyToolResults.length} 筆)         : ~${formatTok(toolResultTokensEst).padStart(7, " ")} tok`,
+			);
+
+			if (topHeavyTools.length > 0) {
+				outLines.push(`  📌 [Top ${topHeavyTools.length} 最肥 Tool Results 排行榜]:`);
+				topHeavyTools.forEach((t, idx) => {
+					const badge = t.isOffload ? "🟢專家/子代理摘要" : "🟡主腦直讀";
+					outLines.push(
+						`     ${idx + 1}. [${t.toolName}] ${t.preview} -> ~${formatTok(t.estTokens)} tok (${t.chars} chars) [${badge}]`,
+					);
+				});
+			}
+		}
+
+		if (viewMode === "all") {
+			outLines.push(``);
+			outLines.push(
+				`【Panel 2】主腦 vs. 免費專家/子代理 省流投報率矩陣 (Offload ROI: ${offloadRatioPct.toFixed(1)}% Tokens 已由專家/子代理分擔)`,
+			);
+			outLines.push(`────────────────────────────────────────────────────────────────────────`);
+			outLines.push(
+				`  • 🧠 主腦 (Orchestrator)        : ${String(mainTotals.calls).padStart(2, " ")} 輪 | In: ${formatTok(mainTotals.input).padStart(6, " ")} | CacheRead: ${formatTok(mainTotals.cacheRead).padStart(6, " ")} | Out: ${formatTok(mainTotals.output).padStart(6, " ")} | Hit%: ${mainCacheHitPct.toFixed(1).padStart(5, " ")}% | Cost: $${mainTotals.cost.toFixed(4)}`,
+			);
+			outLines.push(
+				`  • ⚡ 專家 (dispatch_specialist) : ${String(specialistTotals.calls).padStart(2, " ")} 次 (${specialistTotals.rounds} 輪/${specialistTotals.filesOffloaded} 檔) | In: ${formatTok(specialistTotals.input).padStart(6, " ")} | CacheRead: ${formatTok(specialistTotals.cacheRead).padStart(6, " ")} | Out: ${formatTok(specialistTotals.output).padStart(6, " ")} | Hit%: ${specCacheHitPct.toFixed(1).padStart(5, " ")}% | Cost: $${specialistTotals.cost.toFixed(4)}`,
+			);
+			outLines.push(
+				`  • 🤖 子代理 (subagent)          : ${String(subagentTotals.calls).padStart(2, " ")} 次 (${subagentTotals.steps} 步) | In: ${formatTok(subagentTotals.input).padStart(6, " ")} | CacheRead: ${formatTok(subagentTotals.cacheRead).padStart(6, " ")} | Out: ${formatTok(subagentTotals.output).padStart(6, " ")} | Hit%: ${subCacheHitPct.toFixed(1).padStart(5, " ")}% | Cost: $${subagentTotals.cost.toFixed(4)}`,
+			);
+		}
+
+		if (viewMode === "all" || viewMode === "turns") {
+			outLines.push(``);
+			outLines.push(`【Panel 3】逐輪 Prefix KV Cache 命中率與斷裂根因鑑識 (Per-Turn Cache Forensics)`);
+			outLines.push(`────────────────────────────────────────────────────────────────────────`);
+			if (turnRows.length === 0) {
+				outLines.push(`  (目前尚無已完成的 Assistant 回合紀錄)`);
+			} else {
+				const sliceTurns = viewMode === "turns" ? turnRows : turnRows.slice(-12);
+				if (viewMode !== "turns" && turnRows.length > 12) {
+					outLines.push(`  (僅顯示最近 12 輪；輸入 /context turns 可檢視全部 ${turnRows.length} 輪)`);
+				}
+				for (const r of sliceTurns) {
+					const dtStr = r.deltaSec !== null ? `${r.deltaSec}s` : "-";
+					outLines.push(
+						`  • Turn #${String(r.turnNum).padStart(2, "0")} [${r.model.slice(0, 22).padEnd(22, " ")}] | In:${formatTok(r.input).padStart(6, " ")} | Cache:${formatTok(r.cacheRead).padStart(6, " ")} | Out:${formatTok(r.output).padStart(5, " ")} | Hit:${r.hitRatePct.toFixed(0).padStart(3, " ")}% | Δt:${dtStr.padStart(5, " ")} | ${r.diagnosis}`,
+					);
+				}
+			}
+		}
+
+		if (viewMode === "all") {
+			outLines.push(``);
+			outLines.push(`【Panel 4】自動化優化診斷與建議 (Actionable Optimization Hints)`);
+			outLines.push(`────────────────────────────────────────────────────────────────────────`);
+			const hints: string[] = [];
+			const expiredCount = turnRows.filter((r) => r.diagnosis.startsWith("⏰ TTL_EXPIRED")).length;
+			if (expiredCount > 0) {
+				hints.push(
+					`⏰ 偵測到 ${expiredCount} 次因閒置超過 5 分鐘 (>300s) 導致雲端 KV Cache 自然過期重算；密集互動可維持最高快取命中率。`,
+				);
+			}
+			const heavyDirectReads = topHeavyTools.filter((t) => !t.isOffload && t.estTokens > 2500);
+			if (heavyDirectReads.length > 0) {
+				hints.push(
+					`🟡 發現 ${heavyDirectReads.length} 筆大型工具輸出直接進入主腦 Context（最大: ${heavyDirectReads[0]?.toolName} ~${formatTok(heavyDirectReads[0]?.estTokens ?? 0)} tok）；建議多檔/大檔優先使用 dispatch_specialist(filePaths=[...]) 省流代讀。`,
+				);
+			}
+			if ((ctxUsage.percent ?? 0) > 65) {
+				hints.push(
+					`🧹 目前主視窗佔用已達 ${(ctxUsage.percent ?? 0).toFixed(1)}%，建議適時執行 /compact 交由免費 Scout 壓縮歷史對話以降低每輪 Prefill 負擔。`,
+				);
+			}
+			if (hints.length === 0) {
+				hints.push(
+					`✅ Prefix KV Cache 四大物理防護運作正常（System Prompt 0 突變、Sticky Key 隔離、頂層 Usage 完整接線）。`,
+				);
+			}
+			for (const h of hints) {
+				outLines.push(`  • ${h}`);
+			}
+			outLines.push(
+				`💡 子指令: /context (完整四維度報告) | /context turns (全回合快取明細) | /context tools (工具肥大排行) | /context json | /context pin-refresh (手動刷新本 Session 釘選之 CONTEXT_INDEX)`,
+			);
+		}
+
+		return outLines.join("\n");
+	}
+
+	pi.registerCommand("context", {
+		description:
+			"Friday Context 結構解剖、省流投報率 (Offload ROI) 與逐輪 KV Cache 鑑識儀表板: /context [turns|tools|json|pin-refresh]",
+		handler: async (args, ctx) => {
+			const sub = args.trim().toLowerCase().split(/\s+/)[0] ?? "";
+			if (sub === "pin-refresh" || sub === "refresh") {
+				clearSessionPinnedContextSummaries();
+				const sessionKey = `${ctx.sessionManager?.getSessionId?.() ?? "default"}::${ctx.cwd}`;
+				getSessionPinnedContextSummary(sessionKey, ctx.cwd, true);
+				ctx.ui.notify(
+					"🔄 已手動重新釘選本 Session 之 CONTEXT_INDEX 單行索引！(注意：下一輪將重新建立新的 System Prompt Prefix KV Cache)",
+					"info",
+				);
+				return;
+			}
+			const viewMode: "all" | "turns" | "tools" | "json" =
+				sub === "turns" || sub === "tools" || sub === "json" ? sub : "all";
+			const report = buildContextTelemetryReport(ctx, viewMode);
+			ctx.ui.notify(report, "info");
 		},
 	});
 }

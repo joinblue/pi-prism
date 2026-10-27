@@ -14,6 +14,7 @@
  * 6. Self-Healing Remediation (`RemediationPointer`): Every block includes actionable guidance.
  */
 
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -703,11 +704,44 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("guard", {
-		description: "檢視或重設 Friday 工作區邊界防護狀態 (/guard [reset])",
+		description:
+			"檢視或重設 Friday 工作區邊界防護狀態，或執行架構驗證與索引更新: /guard [reset|validate]",
 		handler: async (args, ctx) => {
-			if (args.trim() === "reset") {
+			const sub = args.trim().toLowerCase().split(/\s+/)[0] ?? "";
+			if (sub === "reset") {
 				sessionTrustedDirs.clear();
 				ctx.ui.notify("🛡️ 已清空所有外部臨時授權目錄，嚴格鎖定回目前專案目錄。", "info");
+				return;
+			}
+			if (sub === "validate") {
+				const validatorPath = path.join(ctx.cwd, "schemas", "schema_validator.py");
+				const mapScriptPath = path.join(ctx.cwd, "scripts", "auto_update_map.py");
+
+				if (!fs.existsSync(validatorPath)) {
+					ctx.ui.notify(`⚠️ 當前專案 (${ctx.cwd}) 尚未包含 schemas/schema_validator.py`, "warning");
+					return;
+				}
+
+				try {
+					const out1 = execFileSync("python3", [validatorPath, "--run-oracle"], {
+						cwd: ctx.cwd,
+						encoding: "utf-8",
+						timeout: 30_000,
+					});
+					let out2 = "";
+					if (fs.existsSync(mapScriptPath)) {
+						out2 = execFileSync("python3", [mapScriptPath], {
+							cwd: ctx.cwd,
+							encoding: "utf-8",
+							timeout: 15_000,
+						});
+					}
+					ctx.ui.notify(`✅ [Friday Harness Validator 驗證通過]\n${out1.trim()}\n${out2.trim()}`, "info");
+				} catch (err: any) {
+					const stdout = err?.stdout ? String(err.stdout) : "";
+					const stderr = err?.stderr ? String(err.stderr) : String(err);
+					ctx.ui.notify(`❌ [Friday Harness Validator 驗證失敗]\n${stdout}\n${stderr}`, "error");
+				}
 				return;
 			}
 			const trustedList =
@@ -724,6 +758,7 @@ export default function (pi: ExtensionAPI) {
 					`• Schema 驗證鎖定 (SEC-SCHEMA): ${path.join(ctx.cwd, "schemas")}`,
 					`• 啟用防護: 引號感知剖析 / 子殼層遞迴拆解 / 唯讀指令豁免 / SEC-PORTABILITY / 自癒處方籤`,
 					`• 已臨時信任之外部目錄:\n${trustedList}`,
+					`• 子指令: /guard reset (重設外部目錄授權) | /guard validate (執行 schema_validator.py --run-oracle 全庫驗證)`,
 				].join("\n"),
 				"info",
 			);

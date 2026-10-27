@@ -50,6 +50,21 @@ export function buildProgressiveContextSummary(cwd: string): string | null {
 			"提示：此索引僅供需要查閱架構規範時按需使用 `read` 調閱；一般對話請直接回應使用者需求，無須主動詢問是否執行驗證。",
 			...itemLines,
 		];
+
+		const pendingAlignments = Array.isArray(raw.pending_topology_alignments)
+			? raw.pending_topology_alignments
+			: [];
+		if (pendingAlignments.length > 0) {
+			lines.push("");
+			lines.push("⚠️ [Pending Topology Alignment | 跨文件潛在規格衝突與待收斂提醒 (supersedes/conflicts_with 留空監測)]:");
+			for (const item of pendingAlignments) {
+				const targets = Array.isArray(item.unlinked_targets) ? item.unlinked_targets.join(", ") : "";
+				lines.push(
+					`- 節點 ${item.source_node_id} (${item.source_node_key} @ \`${item.source_path}\`) 內文提及活躍節點 [${targets}]，但標頭 \`supersedes\`/\`conflicts_with\` 尚未掛載收斂！調閱相關規格時請以最新節點或真實程式碼為準，並在驗證完成後歸檔舊節點。`,
+				);
+			}
+		}
+
 		return lines.join("\n");
 	} catch {
 		return null;
@@ -94,9 +109,35 @@ export function findAffectedMemoryNodes(
 	}
 }
 
+const sessionPinnedSummaries = new Map<string, string>();
+
+export function getSessionPinnedContextSummary(sessionKey: string, cwd: string, forceRefresh = false): string | null {
+	if (!forceRefresh && sessionPinnedSummaries.has(sessionKey)) {
+		return sessionPinnedSummaries.get(sessionKey) ?? null;
+	}
+	const built = buildProgressiveContextSummary(cwd);
+	if (built) {
+		sessionPinnedSummaries.set(sessionKey, built);
+	}
+	return built;
+}
+
+export function clearSessionPinnedContextSummaries(): void {
+	sessionPinnedSummaries.clear();
+}
+
 export default function (pi: ExtensionAPI) {
+	pi.on("session_start", async (_event, ctx) => {
+		const sessionKey = `${ctx.sessionManager?.getSessionId?.() ?? "default"}::${ctx.cwd}`;
+		getSessionPinnedContextSummary(sessionKey, ctx.cwd, true);
+	});
+
 	pi.on("before_agent_start", async (event, ctx) => {
-		const summary = buildProgressiveContextSummary(ctx.cwd);
+		// Prefix KV Cache Guard (Killer 3 Fix):
+		// Pin the Progressive Context Index summary per session so mid-session `memory/**/*.md` edits
+		// (which trigger `auto_update_map.py`) do NOT mutate `messages[0]` (Token 0) and invalidate the Prefix KV Cache.
+		const sessionKey = `${ctx.sessionManager?.getSessionId?.() ?? "default"}::${ctx.cwd}`;
+		const summary = getSessionPinnedContextSummary(sessionKey, ctx.cwd, false);
 		if (!summary) return undefined;
 		return {
 			systemPrompt: `${event.systemPrompt}\n${summary}`,
@@ -121,9 +162,23 @@ export default function (pi: ExtensionAPI) {
 		if (relToCwd.startsWith("memory/") && relToCwd.toLowerCase().endsWith(".md")) {
 			if (relToCwd === "memory/codex/CONTEXT_MAP.md") return undefined;
 
+			const syncScriptPath = path.join(ctx.cwd, "scripts", "sync_doc_metadata.py");
 			const validatorPath = path.join(ctx.cwd, "schemas", "schema_validator.py");
 			const mapScriptPath = path.join(ctx.cwd, "scripts", "auto_update_map.py");
 			if (!fs.existsSync(validatorPath) || !fs.existsSync(absPath)) return undefined;
+
+			let syncOut = "";
+			if (fs.existsSync(syncScriptPath)) {
+				try {
+					syncOut = execFileSync("python3", [syncScriptPath, "--file", absPath, "--project-root", ctx.cwd], {
+						cwd: ctx.cwd,
+						encoding: "utf-8",
+						timeout: 15_000,
+					}).trim();
+				} catch {
+					// If raw frontmatter is malformed, let schema_validator.py report the Prescription Skeleton below
+				}
+			}
 
 			try {
 				const valOut = execFileSync("python3", [validatorPath, "--file", absPath], {
@@ -140,12 +195,13 @@ export default function (pi: ExtensionAPI) {
 					}).trim();
 				}
 				const existingContent = Array.isArray(event.content) ? event.content : [];
+				const syncPrefix = syncOut ? `${syncOut}\n` : "";
 				return {
 					content: [
 						...existingContent,
 						{
 							type: "text",
-							text: `\n✅ [Epistemic Write-Time Gate] ${valOut}${mapOut ? `\n${mapOut}` : ""}`,
+							text: `\n${syncPrefix}✅ [Epistemic Write-Time Gate] ${valOut}${mapOut ? `\n${mapOut}` : ""}`,
 						},
 					],
 				};
@@ -153,12 +209,13 @@ export default function (pi: ExtensionAPI) {
 				const stdout = err?.stdout ? String(err.stdout).trim() : "";
 				const stderr = err?.stderr ? String(err.stderr).trim() : String(err);
 				const existingContent = Array.isArray(event.content) ? event.content : [];
+				const syncPrefix = syncOut ? `${syncOut}\n` : "";
 				return {
 					content: [
 						...existingContent,
 						{
 							type: "text",
-							text: `\n❌ [Epistemic Write-Time Gate — YAML Schema Violation in ${relToCwd}]\n${stdout}\n${stderr}\n👉 請立即根據上方處方籤修復範本 (Prescription Skeleton) 修正該記憶節點！`,
+							text: `\n${syncPrefix}❌ [Epistemic Write-Time Gate — YAML Schema Violation in ${relToCwd}]\n${stdout}\n${stderr}\n👉 請立即根據上方處方籤修復範本 (Prescription Skeleton) 修正該記憶節點！`,
 						},
 					],
 					isError: true,
@@ -189,39 +246,5 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		return undefined;
-	});
-
-	pi.registerCommand("validate", {
-		description: "執行 Friday 獨立驗證器 (schema_validator.py) 並更新 Context 依賴拓撲圖 (auto_update_map.py)",
-		handler: async (_args, ctx) => {
-			const validatorPath = path.join(ctx.cwd, "schemas", "schema_validator.py");
-			const mapScriptPath = path.join(ctx.cwd, "scripts", "auto_update_map.py");
-
-			if (!fs.existsSync(validatorPath)) {
-				ctx.ui.notify(`⚠️ 當前專案 (${ctx.cwd}) 尚未包含 schemas/schema_validator.py`, "warning");
-				return;
-			}
-
-			try {
-				const out1 = execFileSync("python3", [validatorPath, "--run-oracle"], {
-					cwd: ctx.cwd,
-					encoding: "utf-8",
-					timeout: 30_000,
-				});
-				let out2 = "";
-				if (fs.existsSync(mapScriptPath)) {
-					out2 = execFileSync("python3", [mapScriptPath], {
-						cwd: ctx.cwd,
-						encoding: "utf-8",
-						timeout: 15_000,
-					});
-				}
-				ctx.ui.notify(`✅ [Friday Harness Validator 驗證通過]\n${out1.trim()}\n${out2.trim()}`, "info");
-			} catch (err: any) {
-				const stdout = err?.stdout ? String(err.stdout) : "";
-				const stderr = err?.stderr ? String(err.stderr) : String(err);
-				ctx.ui.notify(`❌ [Friday Harness Validator 驗證失敗]\n${stdout}\n${stderr}`, "error");
-			}
-		},
 	});
 }
