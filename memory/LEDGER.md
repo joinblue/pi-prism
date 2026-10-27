@@ -5,10 +5,10 @@ access_tier: "standard"
 priority: "high"
 status: "verified"
 created_at: "2026-10-18"
-updated_at: "2026-10-19"
+updated_at: "2026-10-20"
 author:
   role: "architect"
-  model: "nvidia/nemotron-3-super-120b-a12b"
+  model: "google-vertex/gemini-4-argon"
 reviewer:
   role: "challenger"
   model: "deepseek-ai/deepseek-v4.1-flash"
@@ -65,6 +65,8 @@ topology:
 | **WO-2026-S2** | Stage 2：繁中強制、三段式通報、`LEDGER.md` 與 `/mode` 升級 | ✅ 已完成 (`772ef1d`) | `architect` / `worker` | `schema_validator.py` + `test_friday_architecture.py` (Suite 6) |
 | **WO-2026-S3** | Stage 3：`workspace-guard.ts` 引號感知、`SEC-PORTABILITY` 與處方籤 | ✅ 已完成 (`2c398be`) | `worker` / `challenger` | `test_friday_architecture.py` (Suite 3 & 7) |
 | **WO-2026-R1** | Router & Governance (`M1`~`M7`)：防奪舍、Fallback 鏈、`filePaths` 直讀、省流閘門、雙策略與 `SEC-DOC-GOVERNANCE` | ✅ 已完成 (`c848dc5`) | `architect` / `worker` | `test_friday_architecture.py` (Suite 8) |
+| **WO-2026-R1.1** | Router Stress-Test Hotfix (`S1`~`S4`)：剔除 404 下架模型、`filePaths` 負載上限、60s 逾時與擋死回報鐵律 | ✅ 已完成 (`f8a7b3e`) | `worker` / `auditor` | `memory/audits/MEM-2026-0009_ROUTER_STRESS_AUDIT.md` |
 | **WO-2026-S4** | Stage 4：`schema_validator.py` 散文預算、`AS-05`/`AS-06` 與骨架 | ✅ 已完成 | `worker` / `auditor` | `test_friday_architecture.py` (Suite 9) |
 | **WO-2026-S5** | Stage 5：`auto_update_map.py` 死鏈/AST + `epistemic-gate.ts` 警報 | ✅ 已完成 | `worker` / `auditor` | `test_friday_architecture.py` (Suite 10) |
 | **WO-2026-S6** | Stage 6：`/dream` 三階段睡眠記憶鞏固 + 退出微夢境 | ⏳ 待執行 | `architect` / `auditor` | Stage 6 Dream Pipeline E2E Tests |
+| **WO-2026-P1** | Friday Pulse (`500.PULSE-SCHEDULER.v1`)：定時/事件/動態心跳三模態背景排程、免費 Scout 前哨過濾與 `/pulse` 收件匣 | 📝 藍圖草案 (`MEM-2026-0011`) | `architect` / `worker` | `memory/specs/620_FRIDAY_PULSE_SCHEDULER_SPEC.md` |

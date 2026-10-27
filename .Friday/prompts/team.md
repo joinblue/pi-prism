@@ -1,5 +1,5 @@
 ---
-description: 啟動 Friday 跨模型子代理協作管線 (預設極速實作鏈: scout -> worker -> auditor；深度對抗鏈: scout -> architect -> challenger -> worker -> auditor)
+description: "啟動 Friday 跨模型子代理協作管線 (預設極速實作鏈: scout -> worker -> auditor；深度對抗鏈: scout -> architect -> challenger -> worker -> auditor)"
 ---
 請針對以下任務啟動 Friday 跨模型子代理協作團隊 (`subagent` 工具的 `chain` 模式，各角色自動讀取 `.Friday/agents/*.md` 與 `.Friday/role-models.json` 綁定之免費極速模型)：
 

@@ -5,7 +5,7 @@ access_tier: "standard"
 priority: "high"
 status: "verified"
 created_at: "2026-10-18"
-updated_at: "2026-10-18"
+updated_at: "2026-10-27"
 author:
   role: "architect"
   model: "deepseek-ai/deepseek-v4.1-flash"
@@ -46,8 +46,10 @@ topology:
     - "schemas/schema_validator.py"
   affected_paths:
     - ".Friday/models.json"
+    - ".Friday/role-models.json"
     - ".Friday/settings.json"
     - ".Friday/extensions/model-router.ts"
+    - "scripts/sync_doc_metadata.py"
     - ".Friday/agents/scout.md"
     - ".Friday/agents/architect.md"
     - ".Friday/agents/challenger.md"
@@ -72,13 +74,27 @@ flowchart LR
 
 1. `[FACT]` **可用模型池總表（[`.Friday/models.json`](../../.Friday/models.json)）**：定義供應商 (`providers`) 與可用模型 (`models`) 清單，包含 API 端點 (`baseUrl`)、上下文視窗 (`contextWindow`)、最大輸出 (`maxTokens`) 與相容參數 (`compat`)。
 2. `[FACT]` **大腦啟動預設模型（[`.Friday/settings.json`](../../.Friday/settings.json)）**：決定啟動 `pi` 時預設掛載的 `defaultProvider`（`"pi-router"`）、`defaultModel`（`"auto"`）、預設思考層級 `defaultThinkingLevel`（`"low"`），以及預設啟用的高速檢索工具（`+grep`, `+find`, `+ls`）。
-3. `[FACT]` **固定主腦路由與專家即时派工（[`.Friday/extensions/model-router.ts`](../../.Friday/extensions/model-router.ts)）**：定義 `ROLE_MODELS` 極速模型映射表（預設主腦固定為 `nvidia/nemotron-3-super-120b-a12b`），並註冊零冷啟動之 `dispatch_specialist` 專家派工工具。
+3. `[FACT]` **固定主腦路由與專家即時派工（[`.Friday/extensions/model-router.ts`](../../.Friday/extensions/model-router.ts) & [`.Friday/role-models.json`](../../.Friday/role-models.json)）**：定義 `ROLE_MODELS` 極速模型映射表，並註冊零冷啟動之 `dispatch_specialist` 專家派工工具（含 In-Process 多輪累進迴圈、跨模型接力保留與 Token Offload Gate）。以下區塊由 `scripts/sync_doc_metadata.py` 自動從 `.Friday/role-models.json` 同步渲染：
+
+<!-- AUTO-ROLE-MODELS:START -->
+| 角色 (Role) | 當前綁定模型 (`.Friday/role-models.json` SSOT) |
+| :--- | :--- |
+| `orchestrator` | `google-vertex/gemini-4-argon` |
+| `scout` | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
+| `architect` | `nvidia/nemotron-3-ultra-550b-a55b` |
+| `challenger` | `deepseek-ai/deepseek-v4.1-flash` |
+| `code` | `poolside/laguna-xs-2.1` |
+| `audit` | `z-ai/glm-5.3-flash` |
+| `vision` | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
+| `strategyMode` | `apex-commander` |
+<!-- AUTO-ROLE-MODELS:END -->
+
 4. `[FACT]` **5 大子代理角色綁定（[`.Friday/agents/*.md`](../../.Friday/agents)）**：每個子代理檔案頂部的 YAML Frontmatter 透過 `model: <provider>/<model_id>` 指定專屬 `<1s TTFT` 極速模型與工具權限：
 
 | 子代理角色檔 | 目前綁定模型 (`model:`) | 允許使用的工具 (`tools:`) |
 | :--- | :--- | :--- |
 | [`.Friday/agents/scout.md`](../../.Friday/agents/scout.md) | `nvidia/z-ai/glm-5.3-flash` (`0.60s TTFT`, 1M Context) | `read, grep, find, ls` (唯讀) |
-| [`.Friday/agents/architect.md`](../../.Friday/agents/architect.md) | `nvidia/nvidia/nemotron-3-super-120b-a12b` (`0.28s TTFT`, 120B 旗艦推理) | `read, grep, find, ls` (唯讀) |
+| [`.Friday/agents/architect.md`](../../.Friday/agents/architect.md) | `nvidia/nemotron-3-ultra-550b-a55b` (`<1s TTFT`, 旗艦推理) | `read, grep, find, ls` (唯讀) |
 | [`.Friday/agents/challenger.md`](../../.Friday/agents/challenger.md) | `nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (`0.39s TTFT`, 異體跨模型推理) | `read, grep, find, ls` (唯讀) |
 | [`.Friday/agents/worker.md`](../../.Friday/agents/worker.md) | `nvidia/poolside/laguna-xs-2.1` (`0.28s TTFT`, 程式碼專精) | `read, edit, write, bash, grep, find, ls` |
 | [`.Friday/agents/auditor.md`](../../.Friday/agents/auditor.md) | `nvidia/z-ai/glm-5.3-flash` (`0.60s TTFT`) | `read, bash, grep, find, ls` |
@@ -87,23 +103,20 @@ flowchart LR
 
 ## 二、 不同模型 / 不同子代理使用不同 API Key 的 3 種配置方案
 
-1. `[INFERRED]` 透過 `@earendil-works/pi-coding-agent` v1.3.0 的多供應商與模型 Header 覆寫機制，可依安全層級與分流需求選擇以下三種多 Key 配置方案：
+1. `[INFERRED]` 透過 `@earendil-works/pi-coding-agent` v1.4.0 的多供應商與模型 Header 覆寫機制，可依安全層級與分流需求選擇以下三種多 Key 配置方案：
 
-### 方案 A（最推薦）：在 `auth.json` + `models.json` 拆分多個 Provider 別名（適合多把同平台 Key 分流 Rate Limit 額度）
+### 方案 A（最推薦）：在 `auth.json` 使用 `keys` 陣列 + `models.json` 單一 Provider，配合 Per-Loop Round-Robin 與 Sticky Key（適合多把同平台 Key 分流 Rate Limit 額度並保留多輪 KV Cache）
 
-#### 步驟 1：在 `.Friday/auth.json` 填入多把 Key（受 `SEC-CRED` 絕對保護）
+#### 步驟 1：在 `.Friday/auth.json` 以 `keys[]` 陣列填入多把 Key（受 `SEC-CRED` 絕對保護），由 `model-router.ts` 以 Per-Loop Round-Robin 指派、同迴圈 Sticky Key 鎖定
 ```json
 {
   "nvidia": {
     "type": "api_key",
-    "key": "nvapi-你的第一把主力Key"
-  },
-  "nvidia-sub": {
-    "type": "api_key",
-    "key": "nvapi-你的第二把子代理專用Key"
+    "keys": ["nvapi-主帳號Key-1", "nvapi-備用帳號Key-2", "nvapi-備用帳號Key-3"]
   }
 }
 ```
+> 遇 `HTTP 429 Rate Limit` 時 **同迴圈不切換 Key**（Sticky Key），原地指數退避等待 RPM 恢復 (`5s -> 10s -> 15s`)；僅 `401/403/402` 或退避耗盡時才 Failover 至下一把 Key。
 
 #### 步驟 2：在 [`.Friday/models.json`](../../.Friday/models.json) 新增對應的 Provider 區塊
 ```json

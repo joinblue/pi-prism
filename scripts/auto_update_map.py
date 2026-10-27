@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "schemas"))
-from schema_validator import parse_markdown_frontmatter  # type: ignore
+from schema_validator import detect_unlinked_topology_references, parse_markdown_frontmatter  # type: ignore
 
 DOMAIN_LAYERS = {
     "000": "000 核心憲法與認知規範 (Core Constitution & Epistemic Rules)",
@@ -235,26 +235,66 @@ def build_context_index(project_root: Path) -> Dict[str, Any]:
         by_domain.setdefault(domain, []).append(entry)
 
     key_to_id = {e["node_key"]: e["node_id"] for e in entries if e.get("node_key") and e.get("node_id")}
+    all_nodes_fm: Dict[str, Dict[str, Any]] = {}
+    body_by_id: Dict[str, str] = {}
+    path_by_id: Dict[str, str] = {}
     for entry in entries:
         src_id = entry["node_id"]
         for dep in entry.get("depends_on", []):
             edges.append({"from": src_id, "to": key_to_id.get(dep, dep), "relation": "depends_on"})
     for md_path in md_files:
         try:
-            fm, _ = parse_markdown_frontmatter(md_path)
+            fm, body = parse_markdown_frontmatter(md_path)
             src_id = fm.get("node_id", str(md_path.relative_to(project_root)))
+            all_nodes_fm[src_id] = fm
+            body_by_id[src_id] = body
+            path_by_id[src_id] = str(md_path.relative_to(project_root))
             for sup in fm.get("topology", {}).get("supersedes", []):
                 edges.append({"from": src_id, "to": key_to_id.get(sup, sup), "relation": "supersedes"})
         except Exception:
             pass
 
+    pending_topology_alignments: List[Dict[str, Any]] = []
+    for src_id, fm in sorted(all_nodes_fm.items()):
+        body = body_by_id.get(src_id, "")
+        notices = detect_unlinked_topology_references(src_id, fm, body, all_nodes_fm)
+        if not notices:
+            continue
+        topo = fm.get("topology", {}) or {}
+        declared_refs = set(
+            (topo.get("depends_on") or [])
+            + (topo.get("supersedes") or [])
+            + (topo.get("conflicts_with") or [])
+        )
+        unlinked_targets: List[str] = []
+        for target_id, target_fm in sorted(all_nodes_fm.items()):
+            if target_id == src_id or target_fm.get("status") != "verified":
+                continue
+            if target_fm.get("artifact_type") not in ("spec", "audit"):
+                continue
+            target_key = target_fm.get("context_index", {}).get("node_key", "")
+            if target_id in declared_refs or (target_key and target_key in declared_refs):
+                continue
+            if target_id in body or (target_key and target_key in body):
+                unlinked_targets.append(f"{target_id} ({target_key})" if target_key else target_id)
+        if unlinked_targets:
+            pending_topology_alignments.append(
+                {
+                    "source_node_id": src_id,
+                    "source_node_key": fm.get("context_index", {}).get("node_key", ""),
+                    "source_path": path_by_id.get(src_id, ""),
+                    "unlinked_targets": unlinked_targets,
+                }
+            )
+
     context_index = {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0",
         "project": project_root.name,
         "harness": "Friday",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "total_nodes": len(entries),
         "healed_links": healed_links,
+        "pending_topology_alignments": pending_topology_alignments,
         "domain_registry": {
             code: {
                 "title": title,

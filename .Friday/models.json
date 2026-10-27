@@ -225,37 +225,6 @@
           "type": "chat"
         },
         {
-          "id": "nvidia/nemotron-3-super-120b-a12b",
-          "name": "Nemotron 3 Super",
-          "api": "openai-completions",
-          "provider": "nvidia",
-          "baseUrl": "https://integrate.api.nvidia.com/v1",
-          "headers": {
-            "NVCF-POLL-SECONDS": "30"
-          },
-          "reasoning": true,
-          "input": [
-            "text"
-          ],
-          "cost": {
-            "input": 0.2,
-            "output": 0.8,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          },
-          "compat": {
-            "supportsStore": false,
-            "supportsDeveloperRole": false,
-            "supportsReasoningEffort": false,
-            "maxTokensField": "max_tokens",
-            "supportsLongCacheRetention": false,
-            "supportsStrictMode": false
-          },
-          "contextWindow": 262144,
-          "maxTokens": 262144,
-          "type": "chat"
-        },
-        {
           "id": "nvidia/nemotron-3-ultra-550b-a55b",
           "name": "Nemotron 3 Ultra 550B A55B",
           "api": "openai-completions",

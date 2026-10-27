@@ -178,6 +178,52 @@ def check_as06_node_exclusivity(
     return errors
 
 
+def detect_unlinked_topology_references(
+    node_id: str,
+    fm: Dict[str, Any],
+    body: str,
+    all_nodes: Dict[str, Dict[str, Any]],
+) -> List[str]:
+    """
+    Detects when an active (`verified`/`draft`) spec/audit explicitly references other `verified`
+    spec/audit nodes in its Markdown body while `supersedes` and `conflicts_with` are left empty (`[]`).
+    Returns human-readable reminder notices so temporary unlinked conflicts are never forgotten.
+    """
+    notices: List[str] = []
+    status = fm.get("status", "")
+    if status not in ("verified", "draft"):
+        return notices
+
+    topo = fm.get("topology", {}) or {}
+    declared_refs = set(
+        (topo.get("depends_on") or [])
+        + (topo.get("supersedes") or [])
+        + (topo.get("conflicts_with") or [])
+    )
+
+    unlinked_targets: List[str] = []
+    for target_id, target_fm in sorted(all_nodes.items()):
+        if target_id == node_id:
+            continue
+        if target_fm.get("status") != "verified":
+            continue
+        if target_fm.get("artifact_type") not in ("spec", "audit"):
+            continue
+        target_key = target_fm.get("context_index", {}).get("node_key", "")
+        if target_id in declared_refs or (target_key and target_key in declared_refs):
+            continue
+        if target_id in body or (target_key and target_key in body):
+            label = f"{target_id} ({target_key})" if target_key else target_id
+            unlinked_targets.append(label)
+
+    if unlinked_targets:
+        notices.append(
+            f"[AS-06 Pending Topology Alignment] 節點 {node_id} 內文提及活躍節點 {', '.join(unlinked_targets)}，"
+            f"但標頭 `supersedes` / `conflicts_with` 留空尚未收斂（完成跨檔衝突測試後，請補齊 supersedes 或將舊節點降級為 archived/deprecated）。"
+        )
+    return notices
+
+
 def generate_prescription_skeleton(
     md_path: Path,
     project_root: Path,
@@ -201,7 +247,7 @@ created_at: "2026-10-20"
 updated_at: "2026-10-20"
 author:
   role: "architect"
-  model: "nvidia/nemotron-3-super-120b-a12b"
+  model: "nvidia/nemotron-3-ultra-550b-a55b"
 reviewer:
   role: "challenger"
   model: "deepseek-ai/deepseek-v4.1-flash"
@@ -384,12 +430,17 @@ def check_topology_graph(nodes: Dict[str, Dict[str, Any]]) -> List[str]:
 
     adj: Dict[str, List[str]] = {n: [] for n in nodes}
     for node_id, fm in nodes.items():
+        node_status = fm.get("status", "")
+        is_inactive = node_status in ("archived", "deprecated")
         for dep in fm.get("topology", {}).get("depends_on", []):
             resolved = dep if dep in known_ids else key_to_node.get(dep)
             if not resolved:
                 errors.append(f"[AS-04 Topology] {node_id} 依賴不存在的節點 ID 或定位鍵: {dep}")
-            else:
-                adj[node_id].append(resolved)
+            elif not is_inactive:
+                # Skip cycle edges involving archived/deprecated historical nodes
+                target_status = nodes.get(resolved, {}).get("status", "")
+                if target_status not in ("archived", "deprecated"):
+                    adj[node_id].append(resolved)
 
         # AS-06 checks at graph level
         errors.extend(check_as06_node_exclusivity(node_id, fm, nodes))
@@ -467,6 +518,16 @@ def main() -> int:
             node_key = fm.get("context_index", {}).get("node_key", "") if fm else ""
             status = fm.get("status", "") if fm else ""
             print(f"✅ {rel} [{node_id} | {node_key} | {status}]: PASSED")
+            if fm:
+                try:
+                    _, body_text = parse_markdown_frontmatter(md_file)
+                    lookup_for_notice = dict(existing_nodes)
+                    lookup_for_notice[node_id] = fm
+                    notices = detect_unlinked_topology_references(node_id, fm, body_text, lookup_for_notice)
+                    for n in notices:
+                        print(f"   ⚠️ {n}")
+                except Exception:
+                    pass
 
     if not args.file and all_nodes:
         topo_errors = check_topology_graph(all_nodes)
