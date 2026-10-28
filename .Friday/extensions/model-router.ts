@@ -322,6 +322,12 @@ function loadPersistedRoleModels(): void {
 		if (raw?.strategyMode === "apex-commander" || raw?.strategyMode === "hybrid-synergy") {
 			STRATEGY_MODE = raw.strategyMode;
 		}
+		if (
+			process.env.FRIDAY_STRATEGY_MODE === "apex-commander" ||
+			process.env.FRIDAY_STRATEGY_MODE === "hybrid-synergy"
+		) {
+			STRATEGY_MODE = process.env.FRIDAY_STRATEGY_MODE;
+		}
 		if (migrated404) {
 			savePersistedRoleModels();
 		}
@@ -811,7 +817,8 @@ export default function (pi: ExtensionAPI) {
 				);
 			}
 		} else if (STRATEGY_MODE === "hybrid-synergy") {
-			if (/(架構|設計|重構|演算法|ADR|architecture|refactor|design)/i.test(promptText)) {
+			const promptWithoutPaths = promptText.replace(/[\w./-]+\.[a-z0-9]{1,5}\b/gi, " ");
+			if (/(架構|設計|重構|演算法|\bADR\b|\barchitecture\b|\brefactor\b|\bdesign\b)/i.test(promptWithoutPaths)) {
 				mandates.push(
 					'[MANDATE (Hybrid-Synergy Mode): 偵測到複雜設計與重構任務，主腦在動手修改前，請先呼叫 dispatch_specialist(specialist="architect"|"challenger") 進行跨模型雙腦推演與紅隊挑刺！]',
 				);
@@ -906,7 +913,7 @@ export default function (pi: ExtensionAPI) {
 			"- vision: Multimodal image/chart analysis (pass `imagePath` to attach local image file)",
 		].join(" "),
 		parameters: DispatchSpecialistParams,
-		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			loadPersistedRoleModels();
 			const role = params.specialist as SpecialistRole;
 
@@ -1030,19 +1037,19 @@ export default function (pi: ExtensionAPI) {
 				}
 			}
 
-			// Split `attachedFileSections` into progressive batches when multi-file count > 2 or total chars > 16,000.
+			// Split `attachedFileSections` into progressive batches when multi-file count > 6 or total chars > 48,000.
 			// Never truncate any file content (100% full file fidelity preserved across all rounds).
 			const totalAttachedChars = attachedFileSections.reduce((acc, s) => acc + s.length, 0);
 			const fileBatches: string[][] = [];
-			if (attachedFileSections.length <= 2 && totalAttachedChars <= 16000) {
+			if (attachedFileSections.length <= 6 && totalAttachedChars <= 48000) {
 				fileBatches.push(attachedFileSections);
 			} else {
 				let currentBatch: string[] = [];
 				let currentBatchChars = 0;
 				for (const section of attachedFileSections) {
 					if (
-						currentBatch.length >= 2 ||
-						(currentBatch.length >= 1 && currentBatchChars + section.length > 14000)
+						currentBatch.length >= 4 ||
+						(currentBatch.length >= 1 && currentBatchChars + section.length > 40000)
 					) {
 						fileBatches.push(currentBatch);
 						currentBatch = [];
@@ -1109,11 +1116,18 @@ export default function (pi: ExtensionAPI) {
 				/\b504\b|\b502\b|\b503\b|gateway timeout|aborted|timeout/i.test(reason);
 			const isHeavyReasoningModel = (modelId: string): boolean =>
 				/550b|deepseek-v4\.1|120b|253b/i.test(modelId);
-			const recordCircuitBreakerFailure = (candidateKey: string, modelId: string, reason: string): void => {
+			const recordCircuitBreakerFailure = (
+				candidateKey: string,
+				modelId: string,
+				reason: string,
+				hadActiveStream = false,
+			): void => {
 				if (isGone410Or404(reason)) {
 					pruneDeprecatedModelFromModelsJson(candidateKey, modelId);
 					RUNTIME_COOLDOWN_UNTIL_MS.set(candidateKey, Number.MAX_SAFE_INTEGER);
-				} else if (isGatewayTimeoutOrAbort(reason)) {
+				} else if (isGatewayTimeoutOrAbort(reason) && !hadActiveStream) {
+					// Only quarantine for 15 minutes when the server failed to respond (502/503/504 or TTFB timeout).
+					// Never quarantine a model that was actively streaming tokens normally.
 					RUNTIME_COOLDOWN_UNTIL_MS.set(candidateKey, Date.now() + 15 * 60 * 1000);
 				}
 			};
@@ -1137,15 +1151,16 @@ export default function (pi: ExtensionAPI) {
 					}
 				});
 
-			// M2 + Router v2: Iterate candidateModels with Per-Loop Sticky Key, Multi-Turn Progressive Loop,
-			// In-Place 429 Exponential Backoff Wait (preserves Prefix KV Cache), Per-Round Checkpoint Preservation
-			// (never discards completed intermediate rounds when a later round times out), and fast failover on 404/5xx
+			// M2 + Router v2.3: Iterate candidateModels with Per-Loop Sticky Key, Multi-Turn Progressive Loop,
+			// Smart Streaming Heartbeat Watchdog (TTFB Fail-Fast + Streaming Idle Reset so active heavy models never get cut off),
+			// Partial Stream Salvage, In-Place 429 Exponential Backoff Wait, and Per-Round Checkpoint Preservation
 			const fallbackErrors: string[] = [];
 			let lastAssistantMsg: any = null;
 			let selectedModel = candidateModels[0]!;
 			const conversationMessages: any[] = [];
 			const roundNotes: string[] = [];
 			let completedRoundIdx = 0;
+			let bestPartialAttemptText = "";
 
 			// Top-Level Usage Accumulator (Killer 4 Fix):
 			// Sums token usage & cost across all multi-turn rounds so `/session` and `/context` reflect 100% of specialist consumption.
@@ -1212,71 +1227,213 @@ export default function (pi: ExtensionAPI) {
 					for (let attempt = 0; attempt <= backoffScheduleMs.length; attempt++) {
 						const hasHeavyPayload = attachedFileSections.length > 0 || Boolean(imageBlock);
 						const isHeavyModel = isHeavyReasoningModel(candidate.id);
-						const perRoundTimeoutMs = isHeavyModel
+						// TTFB Watchdog: fail fast if server is hung/queueing with 0 tokens emitted
+						const ttfbTimeoutMs = isHeavyModel
 							? isIntermediateRound
 								? 35000
-								: 48000
+								: 45000
 							: isIntermediateRound || !hasHeavyPayload
 								? 24000
-								: 38000;
+								: 32000;
+						// Streaming Heartbeat Watchdog: once tokens start flowing, reset 30s idle timer on every delta
+						const idleStallTimeoutMs = 30000;
+						// Hard safety ceiling per round so an infinite token loop can never hang forever
+						const maxTotalStreamMs = isIntermediateRound ? 75000 : isHeavyModel ? 210000 : 150000;
+						const roundMaxTokens = isIntermediateRound
+							? isHeavyModel
+								? 1536
+								: 768
+							: isHeavyModel
+								? 8192
+								: 4096;
+
+						const watchdogController = new AbortController();
+						let watchdogAbortReason = "";
+						let hasReceivedFirstToken = false;
+						let idleTimer: ReturnType<typeof setTimeout> | undefined;
+						let hardCeilingTimer: ReturnType<typeof setTimeout> | undefined;
+
+						const clearWatchdogTimers = () => {
+							if (idleTimer) {
+								clearTimeout(idleTimer);
+								idleTimer = undefined;
+							}
+							if (hardCeilingTimer) {
+								clearTimeout(hardCeilingTimer);
+								hardCeilingTimer = undefined;
+							}
+						};
+
+						const armIdleWatchdog = (timeoutMs: number, reasonTag: string) => {
+							if (idleTimer) clearTimeout(idleTimer);
+							idleTimer = setTimeout(() => {
+								watchdogAbortReason = reasonTag;
+								watchdogController.abort();
+							}, timeoutMs);
+						};
+
+						armIdleWatchdog(ttfbTimeoutMs, `TTFB timeout (${Math.round(ttfbTimeoutMs / 1000)}s no first token)`);
+						hardCeilingTimer = setTimeout(() => {
+							watchdogAbortReason = `Max stream ceiling (${Math.round(maxTotalStreamMs / 1000)}s)`;
+							watchdogController.abort();
+						}, maxTotalStreamMs);
+
 						const candidateSignal = signal
-							? AbortSignal.any([signal, AbortSignal.timeout(perRoundTimeoutMs)])
-							: AbortSignal.timeout(perRoundTimeoutMs);
+							? AbortSignal.any([signal, watchdogController.signal])
+							: watchdogController.signal;
 
 						try {
-							const assistantMsg = await ctx.modelRegistry.complete(
-								candidate,
-								{
-									systemPrompt: fullSystemPrompt,
-									messages: conversationMessages,
+							onUpdate?.({
+								content: [
+									{
+										type: "text",
+										text: `⏳ **[Specialist: ${role} | Model: ${candidate.provider}/${candidate.id} | Round ${roundIdx + 1}/${totalRounds}]** 等待模型首字響應中 (TTFB 偵測: ${Math.round(ttfbTimeoutMs / 1000)}s)...`,
+									},
+								],
+								details: {
+									specialist: role,
+									model: `${candidate.provider}/${candidate.id}`,
+									phase: "waiting_ttfb",
 								},
-								{
-									signal: candidateSignal,
-									...(stickyKeyInfo.key ? { apiKey: stickyKeyInfo.key } : {}),
-									...(isIntermediateRound ? { maxTokens: isHeavyModel ? 1536 : 768 } : {}),
-								},
-							);
+							});
+
+							const requestContext = {
+								systemPrompt: fullSystemPrompt,
+								messages: conversationMessages,
+							};
+							const requestOptions = {
+								signal: candidateSignal,
+								...(stickyKeyInfo.key ? { apiKey: stickyKeyInfo.key } : {}),
+								maxTokens: roundMaxTokens,
+							};
+
+							let assistantMsg: any;
+							if (typeof (ctx.modelRegistry as any).stream === "function") {
+								const responseStream = (ctx.modelRegistry as any).stream(
+									candidate,
+									requestContext,
+									requestOptions,
+								);
+								let streamedThinkingChars = 0;
+								let streamedTextChars = 0;
+								let lastUiUpdateMs = Date.now();
+
+								for await (const event of responseStream) {
+									if (
+										event?.type === "thinking_delta" ||
+										event?.type === "text_delta" ||
+										event?.type === "thinking_start" ||
+										event?.type === "text_start"
+									) {
+										hasReceivedFirstToken = true;
+										armIdleWatchdog(
+											idleStallTimeoutMs,
+											`Stream stalled (${Math.round(idleStallTimeoutMs / 1000)}s no token delta)`,
+										);
+										if (event.type === "thinking_delta" && typeof event.delta === "string") {
+											streamedThinkingChars += event.delta.length;
+										} else if (event.type === "text_delta" && typeof event.delta === "string") {
+											streamedTextChars += event.delta.length;
+										}
+										const nowTick = Date.now();
+										if (nowTick - lastUiUpdateMs >= 1500) {
+											lastUiUpdateMs = nowTick;
+											onUpdate?.({
+												content: [
+													{
+														type: "text",
+														text: `🟢 **[Specialist: ${role} | Model: ${candidate.provider}/${candidate.id} | Round ${roundIdx + 1}/${totalRounds}]** 連線正常，持續推理與生成中 (思考: ${streamedThinkingChars} 字 | 正文: ${streamedTextChars} 字)...`,
+													},
+												],
+												details: {
+													specialist: role,
+													model: `${candidate.provider}/${candidate.id}`,
+													phase: "streaming",
+													thinkingChars: streamedThinkingChars,
+													textChars: streamedTextChars,
+												},
+											});
+										}
+									}
+								}
+								assistantMsg = await responseStream.result();
+							} else {
+								assistantMsg = await ctx.modelRegistry.complete(candidate, requestContext, requestOptions);
+							}
+							clearWatchdogTimers();
+
 							lastAssistantMsg = assistantMsg;
 							accumulateAssistantUsage(assistantMsg?.usage);
-							const textBlocks = assistantMsg.content
-								.filter((b): b is { type: "text"; text: string } => b.type === "text")
-								.map((b) => b.text);
-							const thinkingBlocks = (assistantMsg.content as any[])
+							const textBlocks = (assistantMsg?.content ?? [])
+								.filter((b: any): b is { type: "text"; text: string } => b?.type === "text")
+								.map((b: any) => b.text);
+							const thinkingBlocks = ((assistantMsg?.content ?? []) as any[])
 								.filter((b) => b?.type === "thinking" && typeof b.thinking === "string")
 								.map((b) => b.thinking);
-							const outputText = textBlocks.join("\n").trim() || thinkingBlocks.join("\n").trim();
-							const isErr = assistantMsg.stopReason === "error" || Boolean(assistantMsg.errorMessage);
+							const visibleText = textBlocks.join("\n").trim();
+							const thinkingText = thinkingBlocks.join("\n").trim();
+							const outputText = visibleText || thinkingText;
+							const isErr = assistantMsg?.stopReason === "error" || Boolean(assistantMsg?.errorMessage);
 
-							if (!isErr && outputText) {
+							if (outputText.length > bestPartialAttemptText.length) {
+								bestPartialAttemptText = visibleText || outputText;
+							}
+
+							// Partial Stream Salvage: If the model was actively streaming and produced substantial visible content
+							// (>= 200 chars in final round, or >= 100 chars in intermediate note round) before hitting a local watchdog cutoff
+							// (and the user did NOT abort via parent `signal`), salvage the output instead of discarding it!
+							const canSalvagePartial =
+								isErr &&
+								!signal?.aborted &&
+								hasReceivedFirstToken &&
+								(isIntermediateRound ? outputText.length >= 100 : visibleText.length >= 200);
+
+							if ((!isErr && outputText) || canSalvagePartial) {
+								const effectiveText = canSalvagePartial
+									? isIntermediateRound
+										? outputText
+										: `${visibleText}\n\n---\n⚠️ *[系統註記：${candidate.provider}/${candidate.id} 於串流尾段觸發時長保護 (${watchdogAbortReason || "stream_cutoff"})，已自動保留上述完整生成內容]*`
+									: outputText;
+
 								// Push clean assistant text message (strip bulky internal thinking blocks across turns
 								// to keep multi-turn payload compact and compatible with all OpenAI-style NIM endpoints)
 								conversationMessages.push({
 									role: "assistant",
-									content: [{ type: "text", text: outputText }],
+									content: [{ type: "text", text: effectiveText }],
 									timestamp: Date.now(),
 								});
-								finalOutputText = outputText;
+								finalOutputText = effectiveText;
 								if (isIntermediateRound) {
-									roundNotes.push(`**[Round ${roundIdx + 1}/${totalRounds} Notes]**\n${outputText}`);
+									roundNotes.push(`**[Round ${roundIdx + 1}/${totalRounds} Notes]**\n${effectiveText}`);
 								}
 								completedRoundIdx = roundIdx + 1;
 								roundSucceeded = true;
 								break;
 							}
 
-							const errReason =
-								assistantMsg.errorMessage || `stopReason=${assistantMsg.stopReason} (empty output)`;
+							const rawErrReason =
+								assistantMsg?.errorMessage || `stopReason=${assistantMsg?.stopReason} (empty output)`;
+							const errReason = watchdogAbortReason
+								? `${rawErrReason} [${watchdogAbortReason}]`
+								: rawErrReason;
 							if (isRateLimit429(errReason) && attempt < backoffScheduleMs.length) {
 								await sleepWithSignal(backoffScheduleMs[attempt]!, signal);
 								continue;
 							}
-							recordCircuitBreakerFailure(`${candidate.provider}/${candidate.id}`, candidate.id, errReason);
+							recordCircuitBreakerFailure(
+								`${candidate.provider}/${candidate.id}`,
+								candidate.id,
+								errReason,
+								hasReceivedFirstToken,
+							);
 							fallbackErrors.push(
 								`${candidate.provider}/${candidate.id} (round ${roundIdx + 1}/${totalRounds}): ${errReason}`,
 							);
 							break;
 						} catch (err: any) {
-							const errMsg = err?.message ?? String(err);
+							clearWatchdogTimers();
+							const rawErrMsg = err?.message ?? String(err);
+							const errMsg = watchdogAbortReason ? `${rawErrMsg} [${watchdogAbortReason}]` : rawErrMsg;
 							if (isRateLimit429(errMsg) && attempt < backoffScheduleMs.length) {
 								try {
 									await sleepWithSignal(backoffScheduleMs[attempt]!, signal);
@@ -1285,7 +1442,12 @@ export default function (pi: ExtensionAPI) {
 									// Aborted by parent signal
 								}
 							}
-							recordCircuitBreakerFailure(`${candidate.provider}/${candidate.id}`, candidate.id, errMsg);
+							recordCircuitBreakerFailure(
+								`${candidate.provider}/${candidate.id}`,
+								candidate.id,
+								errMsg,
+								hasReceivedFirstToken,
+							);
 							fallbackErrors.push(
 								`${candidate.provider}/${candidate.id} (round ${roundIdx + 1}/${totalRounds}): ${errMsg}`,
 							);
@@ -1344,11 +1506,15 @@ export default function (pi: ExtensionAPI) {
 				roundNotes.length > 0
 					? `\n\n📌 **[Preserved Intermediate Notes (${completedRoundIdx}/${totalRounds} rounds completed before timeout)]**\n${roundNotes.join("\n\n")}`
 					: "";
+			const partialAttemptSuffix =
+				bestPartialAttemptText.length >= 80
+					? `\n\n📝 **[Best Partial Stream Captured Before Cutoff]**\n${bestPartialAttemptText.slice(0, 4000)}`
+					: "";
 			return {
 				content: [
 					{
 						type: "text",
-						text: `❌ **[Specialist: ${role} | All Candidate Models Exhausted]**\n- ${errorSummary}${partialNotesSuffix}`,
+						text: `❌ **[Specialist: ${role} | All Candidate Models Exhausted]**\n- ${errorSummary}${partialNotesSuffix}${partialAttemptSuffix}`,
 					},
 				],
 				details: {

@@ -2,7 +2,7 @@
   "schema_version": "2.2.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-28T16:34:11Z",
+  "generated_at": "2026-10-28T17:57:51Z",
   "total_nodes": 12,
   "healed_links": [],
   "pending_topology_alignments": [],
@@ -272,7 +272,7 @@
           ],
           "summary_1line": "NVIDIA 模型庫強項分配與被動斷路器 (Passive Circuit Breaker) 策略規範，釐清 models.json 與 models-store.json 定位，並定義不干擾 KV Cache 與 40 RPM 配額之健康管理。",
           "path": "memory/specs/510.MODEL-POOL-PLANNING.v1.md",
-          "sha256_16": "9df39c20476adf68",
+          "sha256_16": "8e5521811ffa3603",
           "author_model": "nvidia/nemotron-3-ultra-550b-a55b",
           "reviewer_model": "deepseek-ai/deepseek-v4.1-flash",
           "depends_on": [
@@ -318,7 +318,7 @@
           ],
           "summary_1line": "Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。",
           "path": "memory/specs/610_ROUTER_V2_REDESIGN.md",
-          "sha256_16": "c6c2ece4d12f8aa2",
+          "sha256_16": "2e707a344c7f2d67",
           "author_model": "google-vertex/gemini-4-argon",
           "reviewer_model": "nvidia/nemotron-3-ultra-550b-a55b",
           "depends_on": [

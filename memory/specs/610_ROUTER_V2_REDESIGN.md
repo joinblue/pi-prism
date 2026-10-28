@@ -106,8 +106,8 @@ topology:
    - **Phase 1A（手術刀式原地元資料與 SSOT 同步）**：掃描內文四級認知標籤真實出現次數，以行級 Regex 原地更新 `fact_count`、`inferred_count`、`hypothesis_count`、`unverified_count` 與 `updated_at`（100% 保留原有 YAML 鍵值順序、引號與行內註解，嚴禁使用 `yaml.dump` 破壞排版）；若內文含 `<!-- AUTO-ROLE-MODELS:START/END -->` 標記，自動由 `.Friday/role-models.json` 渲染最新模型表。
    - **Phase 1B（Pre-Flight 阻斷保護）**：先對當前檔案執行完整驗證（僅暫時豁免待由 Phase 2 解決之 `AS-06 Supersedes Conflict`）。若當前檔案存在 `AS-01`、`AS-02 [UNVERIFIED]`、`AS-05` 或 `ProseBudget` 等違規，**立即中止 Phase 2**，確保舊規格絕不會被無效新檔提前廢棄。
    - **Phase 2（`supersedes` 跨檔自動退役與雙向死鎖自癒）**：當新檔合規且 `status == "verified"` 時，自動將 `topology.supersedes` 指向之活躍舊節點降級為 `status: "deprecated"`，並清除舊節點反向指向新檔之 `supersedes` 殘留；同時 `schema_validator.py` 的 `check_topology_graph` 排除 `archived`/`deprecated` 節點之循環依賴邊，徹底根除 `AS-04` 死鎖。
-2. `[FACT]` **Router v2.1 跨模型接力保留與雙策略多模態分流 (`model-router.ts` & `.Friday/AGENTS.md`)**：
-   - `dispatch_specialist` 多輪迴圈將 `conversationMessages`、`roundNotes` 與 `completedRoundIdx` 提升至候選模型迴圈外層，當第 $N$ 輪逾時觸發 Failover 換模型時，**完整保留前 $1 \dots N-1$ 輪已完成之筆記**從第 $N$ 輪接力續跑，並將附帶檔案/圖片之最終整合輪逾時放寬為 `38s`（中間輪與無附加檔案之快速問答維持 `22s` 快速 Failover）。
+2. `[FACT]` **Router v2.3 跨模型接力保留、智慧串流心跳看門狗與雙策略多模態分流 (`model-router.ts` & `.Friday/AGENTS.md`)**：
+   - `dispatch_specialist` 多輪迴圈將 `conversationMessages`、`roundNotes` 與 `completedRoundIdx` 提升至候選模型迴圈外層，當第 $N$ 輪逾時觸發 Failover 換模型時，**完整保留前 $1 \dots N-1$ 輪已完成之筆記**從第 $N$ 輪接力續跑；單輪直通門檻放寬為 `<=6 檔 / <=48,000 字元`，並改用 `ctx.modelRegistry.stream()` 實施 **首字響應偵測 (TTFB `24s~45s`) + 30s 串流心跳續命看門狗 (最長 `210s`) + 尾段半成品搶救 (`Partial Stream Salvage`)**。
    - `readAuthJson()` 具備重複頂層 JSON 鍵自癒解析能力，自動合併多組 API Key。
    - 圖片 `read` 攔截僅於 `apex-commander` 省流模式下生效；當切換至 `hybrid-synergy` 雙腦模式或原生多模態主腦時，允許主腦直接 `read` 圖片，零框架稅完成視覺推理。
 3. `[HYPOTHESIS]` **Stage 6 `/dream` 睡眠記憶批次整合（待後續階段實作）**：跨檔案自由散文段落（Prose）之深度語意整合，留待 Stage 6 `/dream` 離線批次機制處理，不在寫入期 Hook 中呼叫 LLM 改寫內文。

@@ -454,7 +454,10 @@ def test_8_router_handoff_m1_to_m7() -> None:
     assert "hybrid-synergy" in router_src and "apex-commander" in router_src, "M5: Missing dual strategyMode in model-router.ts"
     assert "acquireStickyProviderKey" in router_src and "saveProviderKeyPool" in router_src, "Router v2: Missing Multi-Key Sticky Pool functions in model-router.ts"
     assert "Multi-Turn Loop" in router_src, "Router v2: Missing In-Process Multi-Turn Progressive Loop in model-router.ts"
-    print("  ⚡ M1~M5 + Router v2 靜態查核: 防奪舍路由、Multi-Turn Loop、Per-Loop Sticky Key Pool 與雙策略模式已就緒")
+    assert "ttfbTimeoutMs" in router_src and "idleStallTimeoutMs" in router_src and "canSalvagePartial" in router_src, (
+        "Router v2.3: Missing Smart Streaming Heartbeat Watchdog or Partial Stream Salvage in model-router.ts"
+    )
+    print("  ⚡ M1~M5 + Router v2.3 靜態查核: 防奪舍路由、Multi-Turn Loop、智慧串流心跳看門狗、Sticky Key Pool 與雙策略模式已就緒")
 
     legacy_subagent_dir = FRIDAY_BRAIN / "extensions" / "subagent" / "agents"
     legacy_md_files = list(legacy_subagent_dir.glob("*.md")) if legacy_subagent_dir.exists() else []
@@ -488,7 +491,7 @@ def test_8_router_handoff_m1_to_m7() -> None:
             prompt,
         ],
         cwd=str(PROJECT_ROOT),
-        env=build_env(),
+        env={**build_env(), "FRIDAY_STRATEGY_MODE": "apex-commander"},
         capture_output=True,
         text=True,
         timeout=90,
@@ -515,11 +518,11 @@ def test_8_router_handoff_m1_to_m7() -> None:
                 summary = " | ".join(lines[:2]) if lines else ""
                 print(f"  🔍 [tool={tool_name} | isError={is_err}] -> {summary[:140]}")
 
-    # M4: Image read must be blocked by Token Offload Gate
+    # M4: Image read blocked by Token Offload Gate in apex-commander mode
     assert any(
         t == "read" and "Token Offload Gate" in text
         for t, _, text in tool_results
-    ), "M4 Failed: Expected read('probe_diagram.png') to be blocked by Token Offload Gate!"
+    ), "M4 Failed: Expected read('probe_diagram.png') to be blocked by Token Offload Gate in apex-commander mode!"
 
     # M7: Unmanaged .md outside memory/ must be blocked by SEC-DOC-GOVERNANCE
     assert any(
@@ -527,16 +530,15 @@ def test_8_router_handoff_m1_to_m7() -> None:
         for t, _, text in tool_results
     ), "M7 Failed: Expected write('GHOST_PLAN.md') to be blocked by SEC-DOC-GOVERNANCE!"
 
-    # M3 + Router v2: dispatch_specialist with 3 filePaths must run Multi-Turn Loop (2 rounds, 3 files) and succeed
+    # M3 + Router v2.3: dispatch_specialist with 3 small filePaths must execute directly and succeed
     assert any(
         t == "dispatch_specialist"
         and not is_err
-        and "Multi-Turn Loop: 2 rounds (3 files)" in text
         and ("MEM-2026-0010" in text or "MEM-2026-0008" in text or "MEM-2026-0001" in text)
         for t, is_err, text in tool_results
-    ), "M3 / Router v2 Failed: Expected dispatch_specialist with 3 filePaths to execute 2-round Multi-Turn Loop!"
+    ), "M3 / Router v2.3 Failed: Expected dispatch_specialist with 3 filePaths to succeed and return node_ids!"
 
-    print("✅ [TEST 8 PASSED] M1~M7 + Router v2 多輪漸進式 Multi-Turn Loop (3 檔 2 輪)、Sticky Key Pool、Token Offload Gate 與 SEC-DOC-GOVERNANCE 全數驗證通過！")
+    print("✅ [TEST 8 PASSED] M1~M7 + Router v2.3 智慧串流心跳看門狗、單輪直通、Sticky Key Pool、Token Offload Gate 與 SEC-DOC-GOVERNANCE 全數驗證通過！")
 
 
 def test_9_stage4_validator_prose_as05_as06_skeleton() -> None:
