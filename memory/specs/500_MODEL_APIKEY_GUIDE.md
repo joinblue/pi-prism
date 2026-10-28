@@ -5,7 +5,7 @@ access_tier: "standard"
 priority: "high"
 status: "verified"
 created_at: "2026-10-18"
-updated_at: "2026-10-27"
+updated_at: "2026-10-28"
 author:
   role: "architect"
   model: "deepseek-ai/deepseek-v4.1-flash"
@@ -79,14 +79,14 @@ flowchart LR
 <!-- AUTO-ROLE-MODELS:START -->
 | 角色 (Role) | 當前綁定模型 (`.Friday/role-models.json` SSOT) |
 | :--- | :--- |
-| `orchestrator` | `google-vertex/gemini-4-argon` |
-| `scout` | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
+| `orchestrator` | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
+| `scout` | `z-ai/glm-5.3-flash` |
 | `architect` | `nvidia/nemotron-3-ultra-550b-a55b` |
 | `challenger` | `deepseek-ai/deepseek-v4.1-flash` |
 | `code` | `poolside/laguna-xs-2.1` |
-| `audit` | `z-ai/glm-5.3-flash` |
-| `vision` | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
-| `strategyMode` | `apex-commander` |
+| `audit` | `nvidia/nemotron-3.5-lightning-30b-a3b` |
+| `vision` | `meta/llama-3.2-90b-vision-instruct` |
+| `strategyMode` | `hybrid-synergy` |
 <!-- AUTO-ROLE-MODELS:END -->
 
 4. `[FACT]` **5 大子代理角色綁定（[`.Friday/agents/*.md`](../../.Friday/agents)）**：每個子代理檔案頂部的 YAML Frontmatter 透過 `model: <provider>/<model_id>` 指定專屬 `<1s TTFT` 極速模型與工具權限：

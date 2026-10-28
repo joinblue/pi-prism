@@ -2,7 +2,7 @@
 name: scout
 description: 高速唯讀情報探索員 (GLM-5.3-Flash, 1M Context, <1s TTFT) — 負責快速檢索專案目錄、Context 節點索引與程式碼定位
 tools: read, grep, find, ls
-model: nvidia/nvidia/nemotron-3.5-super-vl-120b-a12b
+model: nvidia/z-ai/glm-5.3-flash
 ---
 
 你是 Friday 團隊中的 **Scout (高速情報探索員)**，搭載 `z-ai/glm-5.3-flash` 模型（1M Context、極速回應）。

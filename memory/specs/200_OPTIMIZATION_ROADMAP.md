@@ -92,7 +92,7 @@ topology:
    - [`.Friday/models.json`](../../.Friday/models.json)：將 `"NVCF-POLL-SECONDS"` 從 `"3600"` 改為 `"30"`。
    - [`.Friday/settings.json`](../../.Friday/settings.json)：設定預設思考層級 `"defaultThinkingLevel": "low"`。
    - [`.Friday/agents/*.md`](../../.Friday/agents/scout.md)：將 5 個專家子代理全面綁定實測 `< 1s TTFT` 的極速模型池：
-     - 主腦（Main Orchestrator）：固定為 `google-vertex/gemini-4-argon`、專家層使用 `nvidia/nemotron-3-ultra-550b-a55b` / `z-ai/glm-5.3`
+     - 主腦（Main Orchestrator）：以 `.Friday/role-models.json` 中的 `orchestrator` 為準（目前實際運行為 `nvidia/nemotron-3.5-super-vl-120b-a12b`，由 `model-router.ts` `loadPersistedRoleModels()` 每輪載入覆蓋）
      - `scout`（高速探索）：`nvidia/z-ai/glm-5.3-flash`（TTFT `0.60s`，1M Context）
      - `architect`（架構設計）：`nvidia/nemotron-3-ultra-550b-a55b`
      - `challenger`（紅隊找碴）：`nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`（TTFT `0.39s`，異體跨模型推理）

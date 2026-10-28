@@ -34,7 +34,12 @@ const DEFAULT_PROVIDER = "nvidia";
 const DEPRECATED_404_MODELS = new Set([
 	"nvidia/nemotron-3-super-120b-a12b",
 	"nvidia/nvidia/nemotron-3-super-120b-a12b",
+	"z-ai/glm-5.3",
+	"nvidia/z-ai/glm-5.3",
 ]);
+
+// Runtime Passive Circuit Breaker: tracks models that returned 410 Gone (permanent) or 504/Timeout (15m cooldown)
+const RUNTIME_COOLDOWN_UNTIL_MS = new Map<string, number>();
 
 export const DEFAULT_ROLE_MODELS = {
 	orchestrator: "nvidia/nemotron-3-ultra-550b-a55b",
@@ -54,41 +59,42 @@ type RouterPhase = "auto" | RoleName;
 export const ROLE_FALLBACK_CHAINS: Record<SpecialistRole, string[]> = {
 	scout: [
 		"z-ai/glm-5.3-flash",
-		"nvidia/nemotron-3-ultra-550b-a55b",
 		"nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/nemotron-3.5-super-vl-120b-a12b",
 		"deepseek-ai/deepseek-v4.1-flash",
-		"z-ai/glm-5.3",
+		"nvidia/nemotron-3-ultra-550b-a55b",
 	],
 	architect: [
 		"nvidia/nemotron-3-ultra-550b-a55b",
-		"z-ai/glm-5.3",
-		"nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/nemotron-3.5-super-vl-120b-a12b",
 		"deepseek-ai/deepseek-v4.1-flash",
+		"nvidia/nemotron-3.5-lightning-30b-a3b",
 		"z-ai/glm-5.3-flash",
 	],
 	challenger: [
 		"deepseek-ai/deepseek-v4.1-flash",
 		"nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/nemotron-3.5-super-vl-120b-a12b",
 		"nvidia/nemotron-3.5-lightning-30b-a3b",
-		"z-ai/glm-5.3",
 		"z-ai/glm-5.3-flash",
 	],
 	code: [
 		"poolside/laguna-xs-2.1",
-		"nvidia/nemotron-3-ultra-550b-a55b",
 		"nvidia/nemotron-3.5-lightning-30b-a3b",
-		"z-ai/glm-5.3",
+		"nvidia/nemotron-3-ultra-550b-a55b",
 		"deepseek-ai/deepseek-v4.1-flash",
+		"z-ai/glm-5.3-flash",
 	],
 	audit: [
 		"z-ai/glm-5.3-flash",
-		"nvidia/nemotron-3-ultra-550b-a55b",
 		"nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/nemotron-3-ultra-550b-a55b",
 		"deepseek-ai/deepseek-v4.1-flash",
-		"z-ai/glm-5.3",
+		"nvidia/llama-3.1-nemotron-70b-instruct",
 	],
 	vision: [
-		"google/diffusiongemma-26b-a4b-it",
+		"nvidia/nemotron-3.5-super-vl-120b-a12b",
+		"meta/llama-3.2-90b-vision-instruct",
 		"meta/llama-3.2-11b-vision-instruct",
 		"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
 		"z-ai/glm-5.3-flash",
@@ -771,16 +777,30 @@ export default function (pi: ExtensionAPI) {
 			// NEVER fallback to ROLE_MODELS.orchestrator (protects paid flagship tokens).
 			const candidateSpecs = Array.from(new Set([ROLE_MODELS[role], ...(ROLE_FALLBACK_CHAINS[role] ?? [])]));
 			const candidateModels: NonNullable<ReturnType<typeof findConfiguredModel>>[] = [];
+			const fallbackCandidatesSkippedCooldown: NonNullable<ReturnType<typeof findConfiguredModel>>[] = [];
 			const seenModelKeys = new Set<string>();
+			const nowMs = Date.now();
 			for (const spec of candidateSpecs) {
+				if (DEPRECATED_404_MODELS.has(spec)) continue;
 				const resolved = findConfiguredModel(ctx, spec);
 				if (resolved) {
 					const key = `${resolved.provider}/${resolved.id}`;
+					if (DEPRECATED_404_MODELS.has(key) || DEPRECATED_404_MODELS.has(resolved.id)) continue;
 					if (!seenModelKeys.has(key)) {
 						seenModelKeys.add(key);
-						candidateModels.push(resolved);
+						const cooldownUntil = RUNTIME_COOLDOWN_UNTIL_MS.get(key) ?? 0;
+						if (cooldownUntil > nowMs) {
+							fallbackCandidatesSkippedCooldown.push(resolved);
+						} else {
+							if (cooldownUntil > 0) RUNTIME_COOLDOWN_UNTIL_MS.delete(key);
+							candidateModels.push(resolved);
+						}
 					}
 				}
+			}
+			// If all candidates are currently on temporary 504/timeout cooldown, re-admit them as last-resort fallbacks
+			if (candidateModels.length === 0 && fallbackCandidatesSkippedCooldown.length > 0) {
+				candidateModels.push(...fallbackCandidatesSkippedCooldown);
 			}
 
 			if (candidateModels.length === 0) {
@@ -946,6 +966,21 @@ export default function (pi: ExtensionAPI) {
 
 			const isRateLimit429 = (reason: string): boolean =>
 				/\b429\b|rate[_\s-]?limit|resource[_\s-]?exhausted|too many requests|quota/i.test(reason);
+			const isGone410Or404 = (reason: string): boolean =>
+				/\b410\b|\b404\b|end of life|no longer available|\bgone\b/i.test(reason);
+			const isGatewayTimeoutOrAbort = (reason: string): boolean =>
+				/\b504\b|\b502\b|\b503\b|gateway timeout|aborted|timeout/i.test(reason);
+			const isHeavyReasoningModel = (modelId: string): boolean =>
+				/550b|deepseek-v4\.1|120b|253b/i.test(modelId);
+			const recordCircuitBreakerFailure = (candidateKey: string, modelId: string, reason: string): void => {
+				if (isGone410Or404(reason)) {
+					DEPRECATED_404_MODELS.add(candidateKey);
+					DEPRECATED_404_MODELS.add(modelId);
+					RUNTIME_COOLDOWN_UNTIL_MS.set(candidateKey, Number.MAX_SAFE_INTEGER);
+				} else if (isGatewayTimeoutOrAbort(reason)) {
+					RUNTIME_COOLDOWN_UNTIL_MS.set(candidateKey, Date.now() + 15 * 60 * 1000);
+				}
+			};
 
 			const sleepWithSignal = (ms: number, abortSig?: AbortSignal): Promise<void> =>
 				new Promise((resolve, reject) => {
@@ -1040,7 +1075,14 @@ export default function (pi: ExtensionAPI) {
 
 					for (let attempt = 0; attempt <= backoffScheduleMs.length; attempt++) {
 						const hasHeavyPayload = attachedFileSections.length > 0 || Boolean(imageBlock);
-						const perRoundTimeoutMs = isIntermediateRound || !hasHeavyPayload ? 22000 : 38000;
+						const isHeavyModel = isHeavyReasoningModel(candidate.id);
+						const perRoundTimeoutMs = isHeavyModel
+							? isIntermediateRound
+								? 35000
+								: 48000
+							: isIntermediateRound || !hasHeavyPayload
+								? 24000
+								: 38000;
 						const candidateSignal = signal
 							? AbortSignal.any([signal, AbortSignal.timeout(perRoundTimeoutMs)])
 							: AbortSignal.timeout(perRoundTimeoutMs);
@@ -1055,7 +1097,7 @@ export default function (pi: ExtensionAPI) {
 								{
 									signal: candidateSignal,
 									...(stickyKeyInfo.key ? { apiKey: stickyKeyInfo.key } : {}),
-									...(isIntermediateRound ? { maxTokens: 768 } : {}),
+									...(isIntermediateRound ? { maxTokens: isHeavyModel ? 1536 : 768 } : {}),
 								},
 							);
 							lastAssistantMsg = assistantMsg;
@@ -1092,6 +1134,7 @@ export default function (pi: ExtensionAPI) {
 								await sleepWithSignal(backoffScheduleMs[attempt]!, signal);
 								continue;
 							}
+							recordCircuitBreakerFailure(`${candidate.provider}/${candidate.id}`, candidate.id, errReason);
 							fallbackErrors.push(
 								`${candidate.provider}/${candidate.id} (round ${roundIdx + 1}/${totalRounds}): ${errReason}`,
 							);
@@ -1106,6 +1149,7 @@ export default function (pi: ExtensionAPI) {
 									// Aborted by parent signal
 								}
 							}
+							recordCircuitBreakerFailure(`${candidate.provider}/${candidate.id}`, candidate.id, errMsg);
 							fallbackErrors.push(
 								`${candidate.provider}/${candidate.id} (round ${roundIdx + 1}/${totalRounds}): ${errMsg}`,
 							);
@@ -1894,19 +1938,23 @@ export default function (pi: ExtensionAPI) {
 			diagnosis: string;
 		}
 		const turnRows: TurnForensicRow[] = [];
-		let prevTurnTs: number | null = null;
+		let prevTurnFinishTs: number | null = null;
 		let prevTurnModel: string | null = null;
+		let pendingThinkingLevelChange: string | null = null;
 
 		const mainTotals = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 		const specialistTotals = { calls: 0, rounds: 0, filesOffloaded: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 		const subagentTotals = { calls: 0, steps: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 
 		for (const entry of allEntries) {
+			if (entry?.type === "thinking_level_change") {
+				pendingThinkingLevelChange = String(entry.thinkingLevel ?? "changed");
+				continue;
+			}
 			if (entry?.type !== "message" || !entry.message) continue;
 			const msg = entry.message;
 
 			if (msg.role === "assistant" && msg.usage) {
-				mainTotals.calls++;
 				const u = msg.usage;
 				const inp = Number(u.input ?? 0) || 0;
 				const out = Number(u.output ?? 0) || 0;
@@ -1914,6 +1962,12 @@ export default function (pi: ExtensionAPI) {
 				const cw = Number(u.cacheWrite ?? 0) || 0;
 				const costVal = typeof u.cost === "object" ? Number(u.cost?.total ?? 0) || 0 : Number(u.cost ?? 0) || 0;
 
+				// Skip aborted/empty error turns (0 tokens) so they do not reset prevTurnFinishTs or mask true idle time
+				if (inp + out + cr + cw === 0) {
+					continue;
+				}
+
+				mainTotals.calls++;
 				mainTotals.input += inp;
 				mainTotals.output += out;
 				mainTotals.cacheRead += cr;
@@ -1922,23 +1976,35 @@ export default function (pi: ExtensionAPI) {
 
 				const promptSide = inp + cr + cw;
 				const hitPct = promptSide > 0 ? (cr / promptSide) * 100 : 0;
-				const ts = typeof msg.timestamp === "number" ? msg.timestamp : entry.timestamp ? Date.parse(entry.timestamp) : null;
-				const deltaSec = prevTurnTs !== null && ts !== null && !Number.isNaN(ts) ? Math.max(0, Math.round((ts - prevTurnTs) / 1000)) : null;
+				const entryTs = entry.timestamp ? Date.parse(entry.timestamp) : null;
+				const reqTs =
+					typeof msg.timestamp === "number" ? msg.timestamp : entryTs !== null && !Number.isNaN(entryTs) ? entryTs : null;
+				const finishTs = entryTs !== null && !Number.isNaN(entryTs) ? entryTs : reqTs;
+				const deltaSec =
+					prevTurnFinishTs !== null && reqTs !== null && !Number.isNaN(reqTs)
+						? Math.max(0, Math.round((reqTs - prevTurnFinishTs) / 1000))
+						: null;
 				const modelLabel = `${msg.provider ?? ""}/${msg.model ?? "unknown"}`.replace(/^\//, "");
 
-				let diagnosis = "🟢 CACHE_HIT";
+				// Note: cacheRead token count is [FACT] returned directly by provider API usage telemetry.
+				// Miss reasons (when cacheRead === 0) are not returned by APIs and are classified as [FACT]/[INFERRED]/[HYPOTHESIS].
+				let diagnosis = "🟢 CACHE_HIT [FACT]";
 				if (turnRows.length === 0) {
-					diagnosis = cr > 0 ? "🟢 WARM_START_HIT" : "❄️ COLD_START (Turn 1)";
+					diagnosis = cr > 0 ? "🟢 WARM_START_HIT [FACT]" : "❄️ COLD_START (Turn 1) [FACT]";
 				} else if (cr > 0 && hitPct >= 50) {
-					diagnosis = "🟢 CACHE_HIT";
+					diagnosis = "🟢 CACHE_HIT [FACT]";
 				} else if (cr > 0 && hitPct < 50) {
-					diagnosis = "🟡 PARTIAL_HIT";
+					diagnosis = "🟡 PARTIAL_HIT [FACT]";
 				} else if (prevTurnModel && prevTurnModel !== modelLabel) {
-					diagnosis = "🔄 MODEL_SWITCH";
+					diagnosis = "🔄 MODEL_SWITCH [FACT]";
+				} else if (pendingThinkingLevelChange) {
+					diagnosis = `🧠 CONFIG_OR_IDLE_MISS (thinking=${pendingThinkingLevelChange}${deltaSec !== null ? `, idle ${deltaSec}s` : ""}) [HYPOTHESIS]`;
 				} else if (deltaSec !== null && deltaSec > 300) {
-					diagnosis = `⏰ TTL_EXPIRED (${deltaSec}s > 5m)`;
+					diagnosis = `⏰ TTL_EXPIRED (idle ${deltaSec}s > 5m) [INFERRED]`;
+				} else if (deltaSec !== null && deltaSec >= 180) {
+					diagnosis = `⏳ IMPLICIT_EVICTED (idle ${deltaSec}s, 3-5m window) [INFERRED]`;
 				} else {
-					diagnosis = "⚠️ CACHE_MISS / NO_PROVIDER_CACHE";
+					diagnosis = "⚠️ CACHE_MISS / EVICTED_OR_NO_CACHE [INFERRED]";
 				}
 
 				turnRows.push({
@@ -1953,8 +2019,9 @@ export default function (pi: ExtensionAPI) {
 					diagnosis,
 				});
 
-				if (ts !== null && !Number.isNaN(ts)) prevTurnTs = ts;
+				if (finishTs !== null && !Number.isNaN(finishTs)) prevTurnFinishTs = finishTs;
 				prevTurnModel = modelLabel;
+				pendingThinkingLevelChange = null;
 			} else if (msg.role === "toolResult") {
 				const tName = String(msg.toolName ?? "");
 				const u = msg.usage ?? msg.details?.usage;
@@ -2141,10 +2208,18 @@ export default function (pi: ExtensionAPI) {
 			outLines.push(`【Panel 4】自動化優化診斷與建議 (Actionable Optimization Hints)`);
 			outLines.push(`────────────────────────────────────────────────────────────────────────`);
 			const hints: string[] = [];
-			const expiredCount = turnRows.filter((r) => r.diagnosis.startsWith("⏰ TTL_EXPIRED")).length;
+			const expiredCount = turnRows.filter(
+				(r) => r.diagnosis.startsWith("⏰ TTL_EXPIRED") || r.diagnosis.startsWith("⏳ IMPLICIT_EVICTED"),
+			).length;
 			if (expiredCount > 0) {
 				hints.push(
-					`⏰ 偵測到 ${expiredCount} 次因閒置超過 5 分鐘 (>300s) 導致雲端 KV Cache 自然過期重算；密集互動可維持最高快取命中率。`,
+					`⏰ 偵測到 ${expiredCount} 次因閒置超過快取存活視窗 (>3~5m) 導致雲端隱式 KV Cache 自然回收重算 [INFERRED]；密集互動可維持最高快取命中率。`,
+				);
+			}
+			const configMissCount = turnRows.filter((r) => r.diagnosis.startsWith("🧠 CONFIG_OR_IDLE_MISS")).length;
+			if (configMissCount > 0) {
+				hints.push(
+					`🧠 偵測到 ${configMissCount} 次於切換思考深度 (thinkingLevel) 或伴隨閒置後發生快取重置 [HYPOTHESIS]；同一任務期間固定思考深度可降低前綴重算機率。`,
 				);
 			}
 			const heavyDirectReads = topHeavyTools.filter((t) => !t.isOffload && t.estTokens > 2500);

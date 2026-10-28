@@ -5,7 +5,7 @@ access_tier: "standard"
 priority: "high"
 status: "draft"
 created_at: "2026-10-27"
-updated_at: "2026-10-27"
+updated_at: "2026-10-28"
 author:
   role: "architect"
   model: "google-vertex/gemini-4-argon"
@@ -14,8 +14,8 @@ reviewer:
   model: "deepseek-ai/deepseek-v4.1-flash"
   verdict: "APPROVED"
 epistemic_profile:
-  fact_count: 3
-  inferred_count: 3
+  fact_count: 4
+  inferred_count: 4
   hypothesis_count: 1
   unverified_count: 0
 verification_oracle:
@@ -97,3 +97,18 @@ topology:
 2. `[INFERRED]` 透過「Stage A 免費 Scout 快篩 + Stage B 按需喚醒」，即使設定高頻率巡檢（例如每 5 分鐘檢查一次資料夾或行情），95% 以上的無變化周期都能由免費模型在 1 秒內攔截消化。
 3. `[INFERRED]` 將「動態心跳（Adaptive Heartbeat）」與「檔案事件監聽（Watcher）」結合後，Friday 即可同時勝任「量化看盤動態盯場」、「ComfyUI 算圖資料夾即時品管」與「程式碼自動巡檢」。
 4. `[HYPOTHESIS]` 預計在實測階段先以「本機常駐輕量 Daemon / 擴充指令 `/pulse` + Telegram/Discord 通知」作為最小可行原型（MVP），再依實際體感迭代調整冷卻閾值與沙盒合併流程。
+
+---
+
+## 四、 CLI 常駐背景執行之 KV Cache 隔離與非侵入式收件匣架構 (Session Cache Isolation & TUI Inbox)
+
+> ⚠️ **本章屬於初步規劃，非定案，可行性尚未確認。** 以下架構設計待實際測試驗證後，可能會調整或重構；正式上線前不應視為最終規格。
+
+1. `[FACT]` 在 `pi-coding-agent` CLI 常駐模式下，主對話（Main Session）累積之歷史 Context 常達 $30\text{k} \sim 80\text{k}$ Tokens，而雲端隱式快取（如 Vertex AI Implicit Cache 約 $3 \sim 8.5$ 分鐘、Anthropic Ephemeral Cache 約 $5$ 分鐘）在排程間隔（如每 $30 \sim 60$ 分鐘觸發一次）期間必然已於伺服器端過期回收。
+2. `[INFERRED]` 若背景排程直接注入使用者正在互動之主對話視窗執行，每次排程喚醒皆會迫使已過期之數萬 Token 主對話歷史重新進行全量 Prefill（Cold Miss），且將無關之巡檢 Log 塞入主視窗造成雙重 Token 浪費；因此，Friday Pulse 確立三大 CLI 快取隔離與通知機制：
+
+| 隔離與協同維度 | 嚴禁之錯誤反模式 (Anti-Pattern) | Friday Pulse 標準架構設計 (`500.PULSE-SCHEDULER.v1`) |
+| :--- | :--- | :--- |
+| **1. 獨立無頭輕量 Session<br>(`Isolated Headless Session`)** | 直接在主 CLI Session 插入排程 Prompt，導致過期之 $40\text{k}+$ 主歷史被迫重算 Prefill | 每次排程於獨立之無頭輕量對話（Headless Ephemeral Session）啟動，僅載入最小必備任務 Prompt（約 $1\text{k} \sim 2\text{k}$ Tokens），與主視窗 Context 完全解耦 |
+| **2. 批次共享快取視窗<br>(`Batch Window Cache Sharing`)** | 多個定時任務分散於不同分鐘各自冷啟動，無法共享 Prefix KV Cache | 支援將相近週期之背景巡檢對齊於同一喚醒批次（在 $3 \sim 5$ 分鐘快取熱度視窗內連續執行），使同批次多輪工具呼叫共享高達 $80\% \sim 95\%$ 之 Prefix KV Cache |
+| **3. TUI 狀態列收件匣推播<br>(`Status-Bar Inbox Indicator`)** | 背景任務主動打斷使用者正在輸入之 CLI 游標或強行刷屏輸出長篇報告 | 背景完成後靜默寫入 `.Friday/pulse-inbox/` 並透過 `ctx.ui.setStatus("friday-pulse", "📬 Pulse: N 則新報告")` 更新底部狀態列；僅於使用者輸入 `/pulse inbox` 時按需載入摘要 |

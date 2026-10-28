@@ -2,19 +2,10 @@
   "schema_version": "2.2.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-27T15:26:21Z",
-  "total_nodes": 11,
+  "generated_at": "2026-10-28T15:31:32Z",
+  "total_nodes": 12,
   "healed_links": [],
-  "pending_topology_alignments": [
-    {
-      "source_node_id": "MEM-2026-0008",
-      "source_node_key": "300.LEDGER.v1",
-      "source_path": "memory/LEDGER.md",
-      "unlinked_targets": [
-        "MEM-2026-0004 (600.AUDIT-001.v1)"
-      ]
-    }
-  ],
+  "pending_topology_alignments": [],
   "domain_registry": {
     "000": {
       "title": "000 核心憲法與認知規範 (Core Constitution & Epistemic Rules)",
@@ -145,7 +136,7 @@
           ],
           "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
           "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md",
-          "sha256_16": "0705e74a238cc480",
+          "sha256_16": "952a2ff966ebec19",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -215,7 +206,7 @@
     },
     "500": {
       "title": "500 動態模型路由與子代理編排 (Model Routing & Subagents)",
-      "count": 3,
+      "count": 4,
       "items": [
         {
           "node_id": "MEM-2026-0006",
@@ -238,7 +229,7 @@
           ],
           "summary_1line": "Friday 模型分配之 4 大設定位置（models.json、settings.json、model-router.ts、agents/*.md）與多組 API Key 分流配置規格。",
           "path": "memory/specs/500_MODEL_APIKEY_GUIDE.md",
-          "sha256_16": "cdc6421889085327",
+          "sha256_16": "cd81c635c9a7aaf3",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -256,6 +247,52 @@
             ".Friday/agents/challenger.md",
             ".Friday/agents/worker.md",
             ".Friday/agents/auditor.md"
+          ]
+        },
+        {
+          "node_id": "MEM-2026-0012",
+          "artifact_type": "spec",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "high",
+          "domain_code": "500",
+          "node_key": "510.MODEL-POOL-PLANNING.v1",
+          "facet_tags": [
+            "Friday:Routing:ModelPool:Planning",
+            "PotoTypeV0:Governance:ModelAssignment:Spec"
+          ],
+          "keywords": [
+            "models.json",
+            "models-store.json",
+            "role-models.json",
+            "dispatch_specialist",
+            "Circuit Breaker",
+            "Sticky Key",
+            "Failover"
+          ],
+          "summary_1line": "NVIDIA 模型庫強項分配與被動斷路器 (Passive Circuit Breaker) 策略規範，釐清 models.json 與 models-store.json 定位，並定義不干擾 KV Cache 與 40 RPM 配額之健康管理。",
+          "path": "memory/specs/510.MODEL-POOL-PLANNING.v1.md",
+          "sha256_16": "7175966fc6e12151",
+          "author_model": "nvidia/nemotron-3-ultra-550b-a55b",
+          "reviewer_model": "deepseek-ai/deepseek-v4.1-flash",
+          "depends_on": [
+            "500.MODEL-APIKEY-SPEC.v1",
+            "500.ROUTER-V2-MULTITURN.v1",
+            "700.HARNESS-BLUEPRINT.v1"
+          ],
+          "affected_paths": [
+            ".Friday/models.json",
+            ".Friday/models-store.json",
+            ".Friday/role-models.json",
+            ".Friday/auth.json",
+            ".Friday/extensions/model-router.ts",
+            ".Friday/agents/scout.md",
+            ".Friday/agents/architect.md",
+            ".Friday/agents/challenger.md",
+            ".Friday/agents/worker.md",
+            ".Friday/agents/auditor.md",
+            "schemas/schema_validator.py",
+            "scripts/sync_doc_metadata.py"
           ]
         },
         {
@@ -281,7 +318,7 @@
           ],
           "summary_1line": "Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。",
           "path": "memory/specs/610_ROUTER_V2_REDESIGN.md",
-          "sha256_16": "9c758719dbde9d5b",
+          "sha256_16": "c6c2ece4d12f8aa2",
           "author_model": "google-vertex/gemini-4-argon",
           "reviewer_model": "nvidia/nemotron-3-ultra-550b-a55b",
           "depends_on": [
@@ -330,7 +367,7 @@
           ],
           "summary_1line": "Friday Pulse 智慧背景排程初步藍圖：定義定時/事件/動態心跳三模態觸發、免費 Scout 前哨過濾與收件匣隔離簽核機制。",
           "path": "memory/specs/620_FRIDAY_PULSE_SCHEDULER_SPEC.md",
-          "sha256_16": "79d28a5f3bed1c33",
+          "sha256_16": "0d37610a20a4dd37",
           "author_model": "google-vertex/gemini-4-argon",
           "reviewer_model": "deepseek-ai/deepseek-v4.1-flash",
           "depends_on": [
@@ -354,7 +391,7 @@
         {
           "node_id": "MEM-2026-0004",
           "artifact_type": "audit",
-          "status": "verified",
+          "status": "deprecated",
           "access_tier": "standard",
           "priority": "normal",
           "domain_code": "600",
@@ -368,7 +405,7 @@
           ],
           "summary_1line": "PotoTypeV0 專案與 Friday Agentic Harness 初始化驗收紀錄：記錄四大核心模組之驗收基準與依賴拓撲。",
           "path": "memory/audits/MEM-2026-0004_HARNESS_INIT_AUDIT.md",
-          "sha256_16": "0345a4654029a58c",
+          "sha256_16": "a3806b4d850196e5",
           "author_model": "poolside/laguna-xs-2.1",
           "reviewer_model": "z-ai/glm-5.3-flash",
           "depends_on": [
@@ -450,7 +487,7 @@
           ],
           "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
           "path": "memory/specs/700_HARNESS_BLUEPRINT.md",
-          "sha256_16": "a543e3b6652cb238",
+          "sha256_16": "f1b3c570e4901c79",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -560,6 +597,21 @@
     {
       "from": "MEM-2026-0006",
       "to": "MEM-2026-0003",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0012",
+      "to": "MEM-2026-0006",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0012",
+      "to": "MEM-2026-0010",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0012",
+      "to": "MEM-2026-0005",
       "relation": "depends_on"
     },
     {

@@ -5,7 +5,7 @@ access_tier: "standard"
 priority: "critical"
 status: "verified"
 created_at: "2026-10-20"
-updated_at: "2026-10-27"
+updated_at: "2026-10-28"
 author:
   role: "architect"
   model: "google-vertex/gemini-4-argon"
@@ -14,7 +14,7 @@ reviewer:
   model: "nvidia/nemotron-3-ultra-550b-a55b"
   verdict: "APPROVED"
 epistemic_profile:
-  fact_count: 8
+  fact_count: 9
   inferred_count: 2
   hypothesis_count: 1
   unverified_count: 0
@@ -128,5 +128,17 @@ topology:
 2. `[FACT]` **`/context` 四維度 Context 結構與 KV Cache 鑑識儀表板 (`model-router.ts`)**：補強內建 `/session` 缺乏之單輪快取斷裂鑑識與工具肥大度分析，註冊 `/context [turns|tools|json|pin-refresh]` 指令：
    - **Panel 1 — Active Context Window Anatomy**：精確拆解目前活躍分支 (`ctx.sessionManager.getBranch()`) 之 System Prompt (`AGENTS.md` + Session-Pinned `CONTEXT_INDEX`)、User/Assistant 對話、Tool Results 與 Thinking 佔比，並列出 **Top 5 最肥 Tool Results 排行榜**。
    - **Panel 2 — Main Brain vs. Specialist/Subagent Offload Matrix**：對照主腦 (`orchestrator`) 與免費專家 (`dispatch_specialist`) 及子代理 (`subagent`) 之呼叫次數、Token 消耗、快取命中率與省流卸載比例 (`Offload Ratio`)。
-   - **Panel 3 — Per-Turn KV Cache Hit/Miss Forensics**：逐輪列出主腦 `input`、`cacheRead`、`Hit%`、相鄰回合間隔 $\Delta t$，並自動診斷快取斷裂根因（`🟢 HIT`、`❄️ COLD_START`、`⏰ TTL_EXPIRED (>5m idle)`、`🔄 MODEL_SWITCH`、`⚠️ PREFIX_MUTATED / PROVIDER_NO_CACHE`）。
+   - **Panel 3 — Per-Turn KV Cache Hit/Miss Forensics**：逐輪列出主腦 `input`、`cacheRead`、`Hit%`、上一輪結束至本輪請求之真實閒置秒數 $\Delta t_{\text{idle}}$（自動跳過 0-token 中斷回合），並依認知嚴謹度標註快取斷裂根因（`🟢 CACHE_HIT [FACT]`、`❄️ COLD_START [FACT]`、`🔄 MODEL_SWITCH [FACT]`、`⏰ TTL_EXPIRED [INFERRED]`、`⏳ IMPLICIT_EVICTED [INFERRED]`、`🧠 CONFIG_OR_IDLE_MISS [HYPOTHESIS]`）。
    - **Panel 4 — Actionable Optimization Hints**：根據實測數據自動給出高信噪比優化建議。
+
+3. `[FACT]` **跨供應商 KV Cache 判定、記憶體釋放推論與 `thinkingLevel` 傳輸協議驗證矩陣 (`@earendil-works/pi-ai` v1.4.0 源碼取證)**：
+   - **快取命中數值 (`cacheRead`) 100% 源自 API 供應商回傳之帳單遙測 `[FACT]`**：`pi-ai` 絕不自行估算快取命中，而是直接讀取各家串流 API 回傳之 `usage` 結構。
+   - **API 供應商絕不回傳「快取釋放或重置原因碼」`[FACT]`**：當快取未命中時，所有供應商僅回傳 `cacheRead = 0`；至於是因為閒置過期、伺服器記憶體回收（VRAM Eviction）或節點漂移，皆屬於本地端根據時間差與事件紀錄所做之鑑識推論（`[INFERRED]`）或假設（`[HYPOTHESIS]`）。
+   - **思考深度 (`thinkingLevel`) 變更由 Session `.jsonl` 之 `{"type": "thinking_level_change"}` 事件紀錄確認 `[FACT]`**，且三大供應商底層傳輸協議與對快取之影響截然不同：
+
+| 驗證維度 / 供應商 | Google Vertex AI (`google-vertex.js`) | Anthropic (`anthropic-messages.js`) | OpenAI 相容 / NVIDIA NIM / DeepSeek / Qwen (`openai-completions.js`) |
+| :--- | :--- | :--- | :--- |
+| **1. `cacheRead` 帳單欄位來源 (`[FACT]`)** | `chunk.usageMetadata.cachedContentTokenCount` (`L172`)；`input = promptTokenCount - cached` | `message.usage.cache_read_input_tokens` (`L497`) 與 `cache_creation_input_tokens` | `prompt_tokens_details.cached_tokens` (OpenAI/NIM, `L1173`)、`prompt_cache_hit_tokens` (DeepSeek) 或 `cached_tokens` (Kimi) |
+| **2. 快取類型與 TTL / 回收特性** | `[FACT]` 未建立 `cachedContents` 資源且未帶 Session Affinity Header (`L355-406`)，純靠 **Vertex AI 隱式快取 (Implicit Caching)**。<br>`[INFERRED]` 實測存活視窗約 **3 ~ 8.5 分鐘**（曾於 `6.9m` 與 `8.2m` 命中，亦曾於閒置 `3.45m` 與 `4.5m` 遭提早回收）。 | `[FACT]` 預設注入 `cache_control: { type: "ephemeral" }` (`L31-41`, `L997-1007`)，採嚴格 **5 分鐘 (`300s`) 滾動式 TTL**（可透過 `PI_CACHE_RETENTION=long` 啟用 1 小時 TTL）。 | `[FACT]` 依賴供應商後端 vLLM / SGLang / NIM 自動前綴雜湊比對（Automatic Prefix Caching）。<br>`[INFERRED]` 視叢集負載與 Sticky Key 路由決定回收時間（通常約 3~10 分鐘）。 |
+| **3. `thinkingLevel` 傳輸位置 (`[FACT]`)** | 寫入頂層 `config.thinkingConfig = { includeThoughts: true, thinkingLevel }` (`L381-393`)，位於 `contents` 與 `systemInstruction` 之外。 | 支援動態 Effort 之模型啟用 `thinking-binding-controls-2026-08-01` (`L980-988`)，透過 `insertThinkingLevelMessages` 將 `{ role: "system", output_config: { effort } }` **插入於 `messages` 陣列最尾端** (`L1247-1258`)。 | 依 `compat.thinkingFormat` 分流 (`L625-734`)：<br>• `qwen-chat-template`：寫入 `chat_template_kwargs.enable_thinking`<br>• `zai` / `deepseek`：寫入頂層 `thinking: { type }` 或 `reasoning_effort` |
+| **4. 切換思考深度對快取之影響** | `[HYPOTHESIS]` `2026-10-25` Session 之 `T17` 同時發生「切換 `thinkingLevel: high` (`E61`)」與「閒置 `204.7s`（已進入 Vertex 3~5 分鐘機會性回收區間）」，故 `thinkingConfig` 單獨變更是否必然重置 Vertex 隱式快取列為 `[HYPOTHESIS]`。 | `[FACT]` 因 `output_config.effort` 附加於 `messages` 最尾端且開啟 `prefix_mismatch_behavior: "drop_block"`，**中途切換思考深度 100% 不破壞歷史 Prefix KV Cache**。 | `[INFERRED]` `qwen-chat-template` 修改 `chat_template_kwargs` 會改變 Tokenizer 渲染後之首尾 Prompt 模板，切換時將導致 Prefix Cache 失效；頂層參數型則視後端實作而定。 |
