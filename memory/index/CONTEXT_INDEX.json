@@ -2,7 +2,7 @@
   "schema_version": "2.2.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-28T15:31:32Z",
+  "generated_at": "2026-10-28T16:34:11Z",
   "total_nodes": 12,
   "healed_links": [],
   "pending_topology_alignments": [],
@@ -272,7 +272,7 @@
           ],
           "summary_1line": "NVIDIA 模型庫強項分配與被動斷路器 (Passive Circuit Breaker) 策略規範，釐清 models.json 與 models-store.json 定位，並定義不干擾 KV Cache 與 40 RPM 配額之健康管理。",
           "path": "memory/specs/510.MODEL-POOL-PLANNING.v1.md",
-          "sha256_16": "7175966fc6e12151",
+          "sha256_16": "9df39c20476adf68",
           "author_model": "nvidia/nemotron-3-ultra-550b-a55b",
           "reviewer_model": "deepseek-ai/deepseek-v4.1-flash",
           "depends_on": [

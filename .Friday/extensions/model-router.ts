@@ -144,6 +144,14 @@ function getAuthFilePath(): string {
 	return path.join(getAgentDir(), "auth.json");
 }
 
+function getModelsJsonFilePath(): string {
+	return path.join(getAgentDir(), "models.json");
+}
+
+function getModelsStoreFilePath(): string {
+	return path.join(getAgentDir(), "models-store.json");
+}
+
 const NON_NVIDIA_PROVIDER_PREFIXES = [
 	"google-vertex/",
 	"google-antigravity/",
@@ -159,18 +167,121 @@ function toProviderQualifiedModelSpec(spec: string): string {
 	if (NON_NVIDIA_PROVIDER_PREFIXES.some((p) => trimmed.startsWith(p))) {
 		return trimmed;
 	}
-	if (
-		trimmed.startsWith("nvidia/nvidia/") ||
-		trimmed.startsWith("nvidia/z-ai/") ||
-		trimmed.startsWith("nvidia/deepseek-ai/") ||
-		trimmed.startsWith("nvidia/poolside/") ||
-		trimmed.startsWith("nvidia/meta/") ||
-		trimmed.startsWith("nvidia/google/") ||
-		trimmed.startsWith("nvidia/openai/")
-	) {
+	if (trimmed.startsWith("nvidia/") && trimmed.indexOf("/", 7) !== -1) {
 		return trimmed;
 	}
 	return `${DEFAULT_PROVIDER}/${trimmed}`;
+}
+
+/**
+ * Synchronizes `.Friday/models-store.json` ( dynamically updated by `pi` `/model` via `pi.dev/api/models` )
+ * into `.Friday/models.json` ( the local parameter override & active whitelist layer ).
+ * - Enforces provider-level and model-level `"headers": { "NVCF-POLL-SECONDS": "30" }` (overriding 3600s default).
+ * - Normalizes NVIDIA NIM free tier `cost` to `0`.
+ * - Automatically imports newly added models from `models-store.json` and prunes EOL/410 models in `DEPRECATED_404_MODELS`
+ *   or dropped upstream by `models-store.json`.
+ * - Writes atomically only when actual JSON changes occur to avoid redundant disk I/O.
+ */
+export function syncNvidiaModelsFromStore(): { updated: boolean; count: number } {
+	const modelsJsonPath = getModelsJsonFilePath();
+	const modelsStorePath = getModelsStoreFilePath();
+	if (!fs.existsSync(modelsJsonPath)) {
+		return { updated: false, count: 0 };
+	}
+	try {
+		const rawModelsJsonText = fs.readFileSync(modelsJsonPath, "utf-8");
+		const modelsJson = JSON.parse(rawModelsJsonText);
+		if (!modelsJson?.providers?.nvidia || typeof modelsJson.providers.nvidia !== "object") {
+			return { updated: false, count: 0 };
+		}
+
+		const nvidiaProvider = modelsJson.providers.nvidia;
+		nvidiaProvider.headers = {
+			...(nvidiaProvider.headers ?? {}),
+			"NVCF-POLL-SECONDS": "30",
+		};
+
+		let sourceModels: any[] = Array.isArray(nvidiaProvider.models) ? nvidiaProvider.models : [];
+		if (fs.existsSync(modelsStorePath)) {
+			try {
+				const storeData = JSON.parse(fs.readFileSync(modelsStorePath, "utf-8"));
+				const storeNvidiaModels = storeData?.nvidia?.models;
+				if (Array.isArray(storeNvidiaModels) && storeNvidiaModels.length > 0) {
+					sourceModels = storeNvidiaModels;
+				}
+			} catch {
+				// Keep existing sourceModels if models-store.json is mid-write or malformed
+			}
+		}
+
+		const normalizedModels: any[] = [];
+		const seenIds = new Set<string>();
+		for (const m of sourceModels) {
+			if (!m || typeof m !== "object" || typeof m.id !== "string") continue;
+			const id = m.id.trim();
+			if (!id || seenIds.has(id)) continue;
+			if (DEPRECATED_404_MODELS.has(id) || DEPRECATED_404_MODELS.has(`nvidia/${id}`)) {
+				continue;
+			}
+			seenIds.add(id);
+			normalizedModels.push({
+				...m,
+				id,
+				headers: {
+					...(m.headers ?? {}),
+					"NVCF-POLL-SECONDS": "30",
+				},
+				cost: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+				},
+			});
+		}
+
+		nvidiaProvider.models = normalizedModels;
+		const nextText = `${JSON.stringify(modelsJson, null, 2)}\n`;
+		if (nextText !== rawModelsJsonText) {
+			fs.writeFileSync(modelsJsonPath, nextText, "utf-8");
+			return { updated: true, count: normalizedModels.length };
+		}
+		return { updated: false, count: normalizedModels.length };
+	} catch {
+		return { updated: false, count: 0 };
+	}
+}
+
+/**
+ * Permanently excises a deprecated (HTTP 410 Gone / 404 Not Found) model from runtime routing,
+ * `.Friday/models.json`, and `.Friday/role-models.json` if any role was still bound to it.
+ */
+export function pruneDeprecatedModelFromModelsJson(candidateKey: string, modelId: string): void {
+	const cleanId = modelId.replace(/^nvidia\//, "").trim();
+	DEPRECATED_404_MODELS.add(candidateKey);
+	DEPRECATED_404_MODELS.add(modelId);
+	if (cleanId) {
+		DEPRECATED_404_MODELS.add(cleanId);
+		DEPRECATED_404_MODELS.add(`nvidia/${cleanId}`);
+	}
+	syncNvidiaModelsFromStore();
+
+	// Self-heal role-models.json if any active role was bound to this 410/404 model
+	let roleMigrated = false;
+	for (const role of Object.keys(DEFAULT_ROLE_MODELS) as RoleName[]) {
+		const currentSpec = ROLE_MODELS[role];
+		if (DEPRECATED_404_MODELS.has(currentSpec)) {
+			const fallbackChain = role === "orchestrator" ? [] : (ROLE_FALLBACK_CHAINS[role as SpecialistRole] ?? []);
+			const replacement =
+				fallbackChain.find((cand) => !DEPRECATED_404_MODELS.has(cand)) ?? DEFAULT_ROLE_MODELS[role];
+			ROLE_MODELS[role] = replacement;
+			syncAgentMarkdownModel(role, replacement);
+			roleMigrated = true;
+		}
+	}
+	if (roleMigrated) {
+		savePersistedRoleModels();
+	}
 }
 
 function syncAgentMarkdownModel(role: RoleName, fullModelSpec: string): void {
@@ -578,9 +689,35 @@ const DispatchSpecialistParams = Type.Object({
 });
 
 export default function (pi: ExtensionAPI) {
+	syncNvidiaModelsFromStore();
 	loadPersistedRoleModels();
 	let forcedMode: RouterPhase = "auto";
 	let turnReadCount = 0;
+
+	const watchedModelsStorePath = getModelsStoreFilePath();
+	const onModelsStoreChanged = (curr: fs.Stats, prev: fs.Stats) => {
+		if (curr.mtimeMs !== prev.mtimeMs) {
+			syncNvidiaModelsFromStore();
+		}
+	};
+	try {
+		fs.watchFile(watchedModelsStorePath, { persistent: false, interval: 1500 }, onModelsStoreChanged);
+	} catch {
+		// Ignore watchFile errors if filesystem does not support stat polling
+	}
+
+	pi.on("session_start", async () => {
+		syncNvidiaModelsFromStore();
+		loadPersistedRoleModels();
+	});
+
+	pi.on("session_shutdown", async () => {
+		try {
+			fs.unwatchFile(watchedModelsStorePath, onModelsStoreChanged);
+		} catch {
+			// Ignore unwatch errors
+		}
+	});
 
 	function resolveRoute(
 		request: FridayRouteRequest,
@@ -974,8 +1111,7 @@ export default function (pi: ExtensionAPI) {
 				/550b|deepseek-v4\.1|120b|253b/i.test(modelId);
 			const recordCircuitBreakerFailure = (candidateKey: string, modelId: string, reason: string): void => {
 				if (isGone410Or404(reason)) {
-					DEPRECATED_404_MODELS.add(candidateKey);
-					DEPRECATED_404_MODELS.add(modelId);
+					pruneDeprecatedModelFromModelsJson(candidateKey, modelId);
 					RUNTIME_COOLDOWN_UNTIL_MS.set(candidateKey, Number.MAX_SAFE_INTEGER);
 				} else if (isGatewayTimeoutOrAbort(reason)) {
 					RUNTIME_COOLDOWN_UNTIL_MS.set(candidateKey, Date.now() + 15 * 60 * 1000);
