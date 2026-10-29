@@ -109,7 +109,7 @@ topology:
 2. `[FACT]` **Router v2.3 跨模型接力保留、智慧串流心跳看門狗與雙策略多模態分流 (`model-router.ts` & `.Friday/AGENTS.md`)**：
    - `dispatch_specialist` 多輪迴圈將 `conversationMessages`、`roundNotes` 與 `completedRoundIdx` 提升至候選模型迴圈外層，當第 $N$ 輪逾時觸發 Failover 換模型時，**完整保留前 $1 \dots N-1$ 輪已完成之筆記**從第 $N$ 輪接力續跑；單輪直通門檻放寬為 `<=6 檔 / <=48,000 字元`，並改用 `ctx.modelRegistry.stream()` 實施 **首字響應偵測 (TTFB `24s~45s`) + 30s 串流心跳續命看門狗 (最長 `210s`) + 尾段半成品搶救 (`Partial Stream Salvage`)**。
    - `readAuthJson()` 具備重複頂層 JSON 鍵自癒解析能力，自動合併多組 API Key。
-   - 圖片 `read` 攔截僅於 `apex-commander` 省流模式下生效；當切換至 `hybrid-synergy` 雙腦模式或原生多模態主腦時，允許主腦直接 `read` 圖片，零框架稅完成視覺推理。
+   - 圖片 `read` 攔截僅於 `apex-commander` 省流模式下生效；當切換至 `hybrid-synergy` 雙腦模式或原生多模態主腦時，允許主腦直接 `read` 圖片與單輪 `<=4` 個一般檔案（零框架稅完成視覺推理），但仍強制保留「單輪 `>4` 檔」與「未設 `limit` 直接讀取非 `memory/` 目錄下 `>350` 行巨型檔案（如 `models-store.json`）」之防塞爆安全閥，避免巨型工具輸出灌爆主腦 Context。
 3. `[HYPOTHESIS]` **Stage 6 `/dream` 睡眠記憶批次整合（待後續階段實作）**：跨檔案自由散文段落（Prose）之深度語意整合，留待 Stage 6 `/dream` 離線批次機制處理，不在寫入期 Hook 中呼叫 LLM 改寫內文。
 
 ---

@@ -35,7 +35,7 @@
      - **多檔檢索/跨檔對比 (`scout` / `challenger`)**：可傳入 `filePaths=["path/a", "path/b"]` 讓免費專家在背景以多輪累進迴圈直接讀取檔案並回傳摘要或對抗審查意見（消耗主腦 0 讀檔 Token）。
    - **通道 C：獨立沙盒代理委派 (`subagent`)**：
      - 凡涉及多檔案修改、程式碼重構與跑測試，優先委派 `subagent(agent="worker"|"scout"|"auditor")` 或 `chain` 模式（預設極速鏈：`scout -> worker -> auditor`；深度對抗鏈：`scout -> architect -> challenger -> worker -> auditor`）。
-   - **雙調度策略模式 (`strategyMode`)**：支援 `apex-commander`（預設，啟用 `tool_call` 圖片與多檔 `read` 強制省流閘門）與 `hybrid-synergy`（雙腦協同對抗模式，解除 `read` 硬攔截並允許原生多模態主腦直接讀圖，可由 `/mode strategy` 切換）。
+   - **雙調度策略模式 (`strategyMode`)**：支援 `apex-commander`（預設，啟用 `tool_call` 圖片、單輪 `>3` 檔與 `>350` 行 `read` 強制省流閘門）與 `hybrid-synergy`（雙腦協同對抗模式，允許原生多模態主腦直接讀圖與單輪 `<=4` 個一般檔案，但仍保留 `>4` 檔及未設 `limit` 讀取 `>350` 行巨型檔案之防塞爆攔截閥，可由 `/mode strategy` 切換）。
 
 ## 3. 專案目錄與內建專屬指令
 

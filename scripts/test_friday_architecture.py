@@ -457,7 +457,10 @@ def test_8_router_handoff_m1_to_m7() -> None:
     assert "ttfbTimeoutMs" in router_src and "idleStallTimeoutMs" in router_src and "canSalvagePartial" in router_src, (
         "Router v2.3: Missing Smart Streaming Heartbeat Watchdog or Partial Stream Salvage in model-router.ts"
     )
-    print("  ⚡ M1~M5 + Router v2.3 靜態查核: 防奪舍路由、Multi-Turn Loop、智慧串流心跳看門狗、Sticky Key Pool 與雙策略模式已就緒")
+    assert "maxReadsPerTurn" in router_src and "Hybrid-Synergy 防塞爆閥" in router_src, (
+        "Router v2.3: Missing Hybrid-Synergy Giant-File & Multi-File Anti-Bloat Safety Valve in model-router.ts"
+    )
+    print("  ⚡ M1~M5 + Router v2.3 靜態查核: 防奪舍路由、Multi-Turn Loop、智慧串流心跳看門狗、Hybrid-Synergy 防塞爆閥、Sticky Key Pool 與雙策略模式已就緒")
 
     legacy_subagent_dir = FRIDAY_BRAIN / "extensions" / "subagent" / "agents"
     legacy_md_files = list(legacy_subagent_dir.glob("*.md")) if legacy_subagent_dir.exists() else []

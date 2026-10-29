@@ -2,7 +2,7 @@
   "schema_version": "2.2.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-28T17:57:51Z",
+  "generated_at": "2026-10-29T04:22:24Z",
   "total_nodes": 12,
   "healed_links": [],
   "pending_topology_alignments": [],
@@ -318,7 +318,7 @@
           ],
           "summary_1line": "Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。",
           "path": "memory/specs/610_ROUTER_V2_REDESIGN.md",
-          "sha256_16": "2e707a344c7f2d67",
+          "sha256_16": "d8648fd5e800663c",
           "author_model": "google-vertex/gemini-4-argon",
           "reviewer_model": "nvidia/nemotron-3-ultra-550b-a55b",
           "depends_on": [

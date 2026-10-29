@@ -843,7 +843,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("tool_call", async (event, ctx) => {
 		loadPersistedRoleModels();
-		if (STRATEGY_MODE !== "apex-commander" || forcedMode !== "auto") return undefined;
+		if (forcedMode !== "auto") return undefined;
 		if (event.toolName !== "read") return undefined;
 
 		// Do not restrict subagent workers (e.g., laguna-xs-2.1 or glm-5.3-flash) running in isolated subprocesses
@@ -858,17 +858,23 @@ export default function (pi: ExtensionAPI) {
 		const rawPath = String((event.input as any)?.path ?? "").trim();
 		if (!rawPath) return undefined;
 
-		// Rule 1: Hard-block reading images directly into Main Orchestrator context
+		// Rule 1: Image Base64 Offload Gate (Only hard-blocked in apex-commander; hybrid-synergy allows multimodal orchestrator direct image read)
 		if (inferImageMimeTypeFromExtension(rawPath) !== null) {
-			return {
-				block: true,
-				reason:
-					'🛡️ [Token Offload Gate] 旗艦省流模式下，禁止使用 read 將圖片 Base64 載入主對話 Context！請立即改呼叫 dispatch_specialist(specialist="vision", imagePath="...", task="...") 由免費視覺專家解析。',
-			};
+			if (STRATEGY_MODE === "apex-commander") {
+				return {
+					block: true,
+					reason:
+						'🛡️ [Token Offload Gate] 旗艦省流模式下，禁止使用 read 將圖片 Base64 載入主對話 Context！請立即改呼叫 dispatch_specialist(specialist="vision", imagePath="...", task="...") 由免費視覺專家解析。',
+				};
+			}
+			return undefined;
 		}
 
-		// Rule 2: Multi-file / Large-file Read Quota Gate (> 3 files in a single turn, or > 350 lines without limit outside memory/)
+		// Rule 2: Multi-file / Large-file Read Quota & Anti-Bloat Safety Valve
+		// - apex-commander: max 3 files per turn, and block >350 lines without limit outside memory/
+		// - hybrid-synergy: max 4 files per turn, and block >350 lines without limit outside memory/ (prevents giant JSON/log files from bloating Main Brain Context)
 		turnReadCount += 1;
+		const maxReadsPerTurn = STRATEGY_MODE === "apex-commander" ? 3 : 4;
 		const resolvedPath = path.isAbsolute(rawPath) ? rawPath : path.resolve(ctx.cwd, rawPath);
 		const relToCwd = path.relative(ctx.cwd, resolvedPath).replace(/\\/g, "/");
 		const isGovernedMemoryFile = relToCwd === "memory" || relToCwd.startsWith("memory/");
@@ -888,7 +894,14 @@ export default function (pi: ExtensionAPI) {
 			}
 		}
 
-		if (turnReadCount > 3 || exceedsLineLimit) {
+		if (turnReadCount > maxReadsPerTurn || exceedsLineLimit) {
+			if (STRATEGY_MODE === "hybrid-synergy") {
+				return {
+					block: true,
+					reason:
+						'🛡️ [Token Offload Gate | Hybrid-Synergy 防塞爆閥] 雙腦協同模式下，雖允許讀圖與一般檔案，但禁止單回合連續 read 超過 4 個檔案或未設 limit 直接生吞 >350 行巨型檔案（防主腦 Context 暴增）！請改用 dispatch_specialist(specialist="scout"|"challenger", filePaths=[...], task="...") 代讀摘要，或在 read 指定 offset/limit 分段讀取。',
+				};
+			}
 			return {
 				block: true,
 				reason:

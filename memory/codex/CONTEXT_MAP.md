@@ -1,6 +1,6 @@
 # 🗺️ PotoTypeV0 × Friday Context Registry & Topology Map (CONTEXT_MAP.md)
 
-> **自動生成時間**: `2026-10-28T17:57:51Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `12`
+> **自動生成時間**: `2026-10-29T04:22:24Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `12`
 > **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入活躍節點 (`verified`/`draft`) 之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。
 
 ## 1. 領域分層索引表 (Domain Layer Registry 000–900)
