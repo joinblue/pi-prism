@@ -10,6 +10,14 @@
 .Friday/models-store.json
 .Friday/role-models.json
 
+# Private Memory Sandbox & Temporary Staging (Never push to GitHub)
+memory/private/
+memory/**/private/
+memory/index/PRIVATE_INDEX.json
+scratch/
+.staging/
+S__*.jpg
+
 # Python & Node Caches
 __pycache__/
 *.py[cod]

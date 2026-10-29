@@ -602,20 +602,18 @@ export default function (pi: ExtensionAPI) {
 				const target = resolveRealTarget(rawPath, ctx.cwd);
 				const relToCwd = path.relative(ctx.cwd, target).replace(/\\/g, "/");
 
-				// M7: SEC-DOC-GOVERNANCE — Block unmanaged ghost .md files outside memory/, README.md, AGENTS.md, .Friday/
+				// M7 & D1: SEC-DOC-GOVERNANCE — Only block unmanaged .md files created directly in the project root directory
+				// (outside memory/ and .Friday/, subdirectories like scratch/, .staging/, src/, tests/, docs/ are freely allowed).
 				if (target.toLowerCase().endsWith(".md") && !relToCwd.startsWith("..")) {
-					const isAllowedMarkdownPath =
-						relToCwd === "README.md" ||
-						relToCwd === "AGENTS.md" ||
-						relToCwd.startsWith("memory/") ||
-						relToCwd.startsWith(".Friday/");
-					if (!isAllowedMarkdownPath) {
+					const isUnmanagedRootMarkdown =
+						!relToCwd.includes("/") && relToCwd !== "README.md" && relToCwd !== "AGENTS.md";
+					if (isUnmanagedRootMarkdown) {
 						return {
 							block: true,
 							reason: formatRemediation(
 								"SEC-DOC-GOVERNANCE",
-								`🛡️ [SEC-DOC-GOVERNANCE] 禁止在 memory/ 目錄以外建立未納管的幽靈 Markdown 文件 (${rawPath})！`,
-								"請將架構規格寫入 memory/specs/、決策寫入 memory/decisions/、驗收寫入 memory/audits/、進度寫入 memory/LEDGER.md，並附上合規 YAML 標頭。",
+								`🛡️ [SEC-DOC-GOVERNANCE] 禁止在專案根目錄直接建立未納管的幽靈 Markdown 文件 (${rawPath}，根目錄僅允許 README.md 與 AGENTS.md)！`,
+								"受治理架構規格請寫入 memory/specs/ 或 memory/private/specs/（決策寫入 memory/decisions/、驗收寫入 memory/audits/、進度寫入 memory/LEDGER.md）並附上合規 YAML 標頭；臨時草稿或測試筆記請寫入 scratch/ 等子目錄。",
 							),
 						};
 					}
@@ -688,11 +686,21 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			// 3. Extract paths from each executable segment and verify boundary + read-only exemptions
+			const displayCmd = command.length > 1000 ? `${command.slice(0, 1000)}...` : command;
 			for (const seg of parsed.allExecutableSegments) {
 				const segReadOnly = isReadOnlyBashCommand(seg);
 				const extractedPaths = extractPathsFromBash(seg);
+				// Also scan inside quoted strings when executing non-read-only commands (e.g. `python3 -c "open('schemas/...', 'w')"`)
+				if (!segReadOnly) {
+					const quotedMatches = command.match(/(?:schemas\/|\.Friday\/|memory\/LEDGER\.md)[^\s"'`)]*/g) ?? [];
+					for (const qm of quotedMatches) {
+						if (!extractedPaths.includes(qm)) {
+							extractedPaths.push(qm);
+						}
+					}
+				}
 				for (const rawPath of extractedPaths) {
-					const check = await verifyPathAccess(rawPath, "bash", command.slice(0, 100), ctx, segReadOnly);
+					const check = await verifyPathAccess(rawPath, "bash", displayCmd, ctx, segReadOnly);
 					if (!check.allowed) {
 						return { block: true, reason: check.reason ?? "Blocked by Friday Workspace Guard" };
 					}

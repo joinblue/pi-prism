@@ -5,7 +5,7 @@ access_tier: "restricted"
 priority: "critical"
 status: "verified"
 created_at: "2026-10-16"
-updated_at: "2026-10-16"
+updated_at: "2026-10-29"
 author:
   role: "architect"
   model: "deepseek-ai/deepseek-v4.1-flash"
@@ -33,7 +33,8 @@ context_index:
     - "Workspace Boundary Guard"
     - "SEC-BRAIN"
     - "SEC-CRED"
-  summary_1line: "定義 Friday Harness 之工作區邊界護欄：鎖定 ctx.cwd、保護 .Friday 大腦核心 (SEC-BRAIN)、隔離金鑰 (SEC-CRED) 與攔截危險指令。"
+    - "SEC-DOC-GOVERNANCE"
+  summary_1line: "定義 Friday Harness 之工作區邊界護欄：鎖定 ctx.cwd、保護 .Friday 大腦核心 (SEC-BRAIN)、隔離金鑰 (SEC-CRED)、根目錄 .md 保護 (SEC-DOC-GOVERNANCE) 與攔截危險指令。"
 topology:
   depends_on:
     - "MEM-2026-0001"
@@ -55,7 +56,7 @@ topology:
    - 若處於互動式 TUI 模式 (`ctx.hasUI === true`)，系統強制呼叫 `await ctx.ui.select()` 彈出視窗詢問使用者（允許單次 / 本次 Session 信任該目錄 / 拒絕攔截）。
    - 若處於非互動模式或子代理模式 (`ctx.hasUI === false`)，系統無條件回傳 `{ block: true, reason: ... }` 直接拒絕，確保背景子代理絕不越界。
 
-## 二、 機密金鑰與毀滅性指令防護 (`SEC-CRED` & `SEC-CMD-V1`)
+## 二、 機密金鑰、根目錄文件邊界與毀滅性指令防護 (`SEC-CRED`, `SEC-DOC-GOVERNANCE` & `SEC-CMD-V1`)
 
-1. `[FACT]` 任何針對 `auth.json`、`.env` 或私密憑證檔之讀取與修改請求，無論位於工作區內外，一律由 `workspace-guard.ts` 強制阻斷 (`SEC-CRED`)。
+1. `[FACT]` 任何針對 `auth.json`、`.env` 或私密憑證檔之讀取與修改請求，無論位於工作區內外，一律由 `workspace-guard.ts` 強制阻斷 (`SEC-CRED`)；同時於 `memory/` 與 `.Friday/` 之外，`SEC-DOC-GOVERNANCE` 僅攔截在專案根目錄 (`./`) 直接建立未納管 `.md` 檔案（`README.md`, `AGENTS.md` 除外），開放 `scratch/`、`.staging/` 與程式碼子目錄自由讀寫，並將私有規格分流至 `memory/private/specs/`（索引於 `PRIVATE_INDEX.json`）。
 2. `[INFERRED]` 透過在 `PI_CODING_AGENT_DIR` (`$(pwd)/.Friday`) 層級部署上述 Hook，可確保即使專案尚未執行 `/trust`，安全護欄依然隨大腦啟動 100% 強制生效。

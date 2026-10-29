@@ -187,24 +187,30 @@ def scan_code_dependencies(project_root: Path) -> List[Dict[str, str]]:
     return code_edges
 
 
-def build_context_index(project_root: Path) -> Dict[str, Any]:
-    memory_dir = project_root / "memory"
-    md_files = sorted(
-        p for p in memory_dir.rglob("*.md")
-        if p.name != "CONTEXT_MAP.md"
-    )
+def is_private_memory_path(project_root: Path, md_path: Path) -> bool:
+    rel_parts = md_path.relative_to(project_root).parts
+    return "private" in rel_parts
 
-    healed_links = heal_dead_links(project_root, md_files)
-    code_dependency_edges = scan_code_dependencies(project_root)
 
+def _compile_index_subset(
+    project_root: Path,
+    subset_files: List[Path],
+    all_nodes_fm: Dict[str, Dict[str, Any]],
+    key_to_id: Dict[str, str],
+    healed_links: List[Dict[str, str]],
+    code_dependency_edges: List[Dict[str, str]],
+) -> Dict[str, Any]:
     entries: List[Dict[str, Any]] = []
     by_domain: Dict[str, List[Dict[str, Any]]] = {k: [] for k in DOMAIN_LAYERS}
     edges: List[Dict[str, str]] = []
+    subset_fm: Dict[str, Dict[str, Any]] = {}
+    body_by_id: Dict[str, str] = {}
+    path_by_id: Dict[str, str] = {}
 
-    for md_path in md_files:
+    for md_path in subset_files:
         rel_path = str(md_path.relative_to(project_root))
         try:
-            fm, _ = parse_markdown_frontmatter(md_path)
+            fm, body = parse_markdown_frontmatter(md_path)
         except Exception as exc:
             print(f"⚠️ Skipping unparseable file {rel_path}: {exc}", file=sys.stderr)
             continue
@@ -226,38 +232,33 @@ def build_context_index(project_root: Path) -> Dict[str, Any]:
             "summary_1line": idx.get("summary_1line", ""),
             "path": rel_path,
             "sha256_16": sha256_file(md_path),
-            "author_model": fm.get("author", {}).get("model"),
-            "reviewer_model": fm.get("reviewer", {}).get("model"),
-            "depends_on": topo.get("depends_on", []),
-            "affected_paths": topo.get("affected_paths", []),
+            "author_model": fm.get("author", {}).get("model") if isinstance(fm.get("author"), dict) else None,
+            "reviewer_model": fm.get("reviewer", {}).get("model") if isinstance(fm.get("reviewer"), dict) else None,
+            "depends_on": topo.get("depends_on", []) if isinstance(topo, dict) else [],
+            "affected_paths": topo.get("affected_paths", []) if isinstance(topo, dict) else [],
         }
         entries.append(entry)
         by_domain.setdefault(domain, []).append(entry)
 
-    key_to_id = {e["node_key"]: e["node_id"] for e in entries if e.get("node_key") and e.get("node_id")}
-    all_nodes_fm: Dict[str, Dict[str, Any]] = {}
-    body_by_id: Dict[str, str] = {}
-    path_by_id: Dict[str, str] = {}
+        src_id = fm.get("node_id", rel_path)
+        subset_fm[src_id] = fm
+        body_by_id[src_id] = body
+        path_by_id[src_id] = rel_path
+
     for entry in entries:
         src_id = entry["node_id"]
         for dep in entry.get("depends_on", []):
             edges.append({"from": src_id, "to": key_to_id.get(dep, dep), "relation": "depends_on"})
-    for md_path in md_files:
-        try:
-            fm, body = parse_markdown_frontmatter(md_path)
-            src_id = fm.get("node_id", str(md_path.relative_to(project_root)))
-            all_nodes_fm[src_id] = fm
-            body_by_id[src_id] = body
-            path_by_id[src_id] = str(md_path.relative_to(project_root))
-            for sup in fm.get("topology", {}).get("supersedes", []):
-                edges.append({"from": src_id, "to": key_to_id.get(sup, sup), "relation": "supersedes"})
-        except Exception:
-            pass
+
+    for src_id, fm in subset_fm.items():
+        topo = fm.get("topology", {}) if isinstance(fm.get("topology"), dict) else {}
+        for sup in topo.get("supersedes", []):
+            edges.append({"from": src_id, "to": key_to_id.get(sup, sup), "relation": "supersedes"})
 
     pending_topology_alignments: List[Dict[str, Any]] = []
-    for src_id, fm in sorted(all_nodes_fm.items()):
+    for src_id, fm in sorted(subset_fm.items()):
         body = body_by_id.get(src_id, "")
-        notices = detect_unlinked_topology_references(src_id, fm, body, all_nodes_fm)
+        notices = detect_unlinked_topology_references(src_id, fm, body, subset_fm)
         if not notices:
             continue
         topo = fm.get("topology", {}) or {}
@@ -267,7 +268,7 @@ def build_context_index(project_root: Path) -> Dict[str, Any]:
             + (topo.get("conflicts_with") or [])
         )
         unlinked_targets: List[str] = []
-        for target_id, target_fm in sorted(all_nodes_fm.items()):
+        for target_id, target_fm in sorted(subset_fm.items()):
             if target_id == src_id or target_fm.get("status") != "verified":
                 continue
             if target_fm.get("artifact_type") not in ("spec", "audit"):
@@ -287,7 +288,7 @@ def build_context_index(project_root: Path) -> Dict[str, Any]:
                 }
             )
 
-    context_index = {
+    return {
         "schema_version": "2.2.0",
         "project": project_root.name,
         "harness": "Friday",
@@ -306,7 +307,54 @@ def build_context_index(project_root: Path) -> Dict[str, Any]:
         "causal_topology_edges": edges,
         "code_dependency_edges": code_dependency_edges,
     }
-    return context_index
+
+
+def build_context_index(project_root: Path) -> Dict[str, Any]:
+    public_index, _ = build_public_and_private_indices(project_root)
+    return public_index
+
+
+def build_public_and_private_indices(project_root: Path) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    memory_dir = project_root / "memory"
+    md_files = sorted(
+        p for p in memory_dir.rglob("*.md")
+        if p.name != "CONTEXT_MAP.md"
+    )
+
+    healed_links = heal_dead_links(project_root, md_files)
+    code_dependency_edges = scan_code_dependencies(project_root)
+
+    all_nodes_fm: Dict[str, Dict[str, Any]] = {}
+    key_to_id: Dict[str, str] = {}
+    public_files: List[Path] = []
+    private_files: List[Path] = []
+
+    for md_path in md_files:
+        if is_private_memory_path(project_root, md_path):
+            private_files.append(md_path)
+        else:
+            public_files.append(md_path)
+        try:
+            fm, _ = parse_markdown_frontmatter(md_path)
+            nid = fm.get("node_id")
+            nkey = fm.get("context_index", {}).get("node_key") if isinstance(fm.get("context_index"), dict) else None
+            if nid:
+                all_nodes_fm[nid] = fm
+            if nkey and nid:
+                key_to_id[nkey] = nid
+        except Exception:
+            pass
+
+    public_healed = [h for h in healed_links if "private" not in Path(h["file"]).parts]
+    private_healed = [h for h in healed_links if "private" in Path(h["file"]).parts]
+
+    public_index = _compile_index_subset(
+        project_root, public_files, all_nodes_fm, key_to_id, public_healed, code_dependency_edges
+    )
+    private_index = _compile_index_subset(
+        project_root, private_files, all_nodes_fm, key_to_id, private_healed, []
+    )
+    return public_index, private_index
 
 
 def render_context_map_md(project_root: Path, index: Dict[str, Any]) -> str:
@@ -381,20 +429,28 @@ def render_context_map_md(project_root: Path, index: Dict[str, Any]) -> str:
 
 def main() -> int:
     project_root = Path(__file__).resolve().parent.parent
-    index = build_context_index(project_root)
+    index, private_index = build_public_and_private_indices(project_root)
 
     index_path = project_root / "memory" / "index" / "CONTEXT_INDEX.json"
     index_path.parent.mkdir(parents=True, exist_ok=True)
     index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+    private_index_path = project_root / "memory" / "index" / "PRIVATE_INDEX.json"
+    if private_index.get("total_nodes", 0) > 0:
+        private_index_path.write_text(json.dumps(private_index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    elif private_index_path.exists():
+        private_index_path.unlink()
+
     map_path = project_root / "memory" / "codex" / "CONTEXT_MAP.md"
     map_path.parent.mkdir(parents=True, exist_ok=True)
     map_path.write_text(render_context_map_md(project_root, index), encoding="utf-8")
 
-    healed = index.get("healed_links", [])
+    healed = index.get("healed_links", []) + private_index.get("healed_links", [])
     if healed:
         print(f"🩹 Auto-healed {len(healed)} broken relative Markdown link(s): {healed}")
-    print(f"✅ Compiled CONTEXT_INDEX.json ({index['total_nodes']} nodes, {len(index.get('code_dependency_edges', []))} code edges) -> {index_path}")
+    print(f"✅ Compiled CONTEXT_INDEX.json ({index['total_nodes']} public nodes, {len(index.get('code_dependency_edges', []))} code edges) -> {index_path}")
+    if private_index.get("total_nodes", 0) > 0:
+        print(f"🔒 Compiled PRIVATE_INDEX.json ({private_index['total_nodes']} private nodes, git-ignored) -> {private_index_path}")
     print(f"✅ Rendered CONTEXT_MAP.md -> {map_path}")
     return 0
 

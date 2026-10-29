@@ -229,12 +229,35 @@ def generate_prescription_skeleton(
     project_root: Path,
     fm: Dict[str, Any] | None,
 ) -> str:
+    import time
+    today_str = time.strftime("%Y-%m-%d")
     rel_path = str(md_path.relative_to(project_root)) if md_path.is_relative_to(project_root) else md_path.name
-    node_id = (fm or {}).get("node_id", "MEM-2026-0099")
-    artifact_type = (fm or {}).get("artifact_type", "spec")
-    node_key = (fm or {}).get("context_index", {}).get("node_key", "300.MODULE-SPEC.v1")
-    domain_code = (fm or {}).get("context_index", {}).get("domain_code", "300")
-    return f"""🔧 [Prescription Skeleton | YAML 處方籤修復範本 ({rel_path})]
+    fm_dict = fm if isinstance(fm, dict) else {}
+    ctx_idx = fm_dict.get("context_index") if isinstance(fm_dict.get("context_index"), dict) else {}
+    node_id = fm_dict.get("node_id", "MEM-2026-0099")
+    artifact_type = fm_dict.get("artifact_type", "spec")
+    node_key = ctx_idx.get("node_key", "300.MODULE-SPEC.v1")
+    domain_code = ctx_idx.get("domain_code", "300")
+
+    # D5: When YAML frontmatter already exists (has node_id/id or summary_1line/title), output a compact
+    # 8-line targeted diff/fix hint instead of dumping a 60-line full markdown body on every minor failure.
+    has_existing_header = isinstance(fm, dict) and bool(
+        (fm.get("node_id") or fm.get("id"))
+        and (ctx_idx.get("node_key") or ctx_idx.get("summary_1line") or fm.get("title") or fm.get("artifact_type"))
+    )
+    if has_existing_header:
+        return (
+            f"🔧 [Prescription Skeleton | 1-Turn 自癒處方籤範本 ({rel_path} — Targeted Fix Hint)]\n"
+            f"偵測到 `{rel_path}` 已具備 YAML Frontmatter (`{node_id}` / `{node_key}`)，無需覆寫整份 60 行模板，請僅針對上方錯誤行進行局部修補 (`edit`)：\n"
+            f"  1. [AS-01/Author]: 確保 `author.model` 與 `reviewer.model` 為不同家族模型，且 `reviewer.verdict: \"APPROVED\"`。\n"
+            f"  2. [AS-02/Epistemic]: 內文列表行首 (`- [FACT]` / `1. [INFERRED]`) 實際數量須與 `epistemic_profile` 統計完全一致。\n"
+            f"  3. [ProseBudget]: 若散文行數超標 (`rule<=50`, `spec<=80`, `decision<=60`)，請將段落改寫為 Markdown 表格 (`|...|`) 或程式碼區塊。\n"
+            f"  4. [AS-05/Portability]: 移除本機絕對路徑 (`/home/...`, `file:///...`)，改為專案相對路徑。\n"
+            f"  5. [AS-06/Topology]: 若宣告 `supersedes` 舊節點，請先將舊節點 `status` 降級為 `deprecated` 或 `archived`。\n"
+            f"  6. [Section/Schema]: 檢查必填欄位 (`verification_oracle`, `context_index`, `topology`) 與 `## §` 章節結構。"
+        )
+
+    return f"""🔧 [Prescription Skeleton | 1-Turn 自癒處方籤範本 ({rel_path})]
 請直接複製以下合法 YAML Frontmatter 與三段式認知內文骨架覆寫或修補 `{rel_path}`：
 ```markdown
 ---
@@ -243,8 +266,8 @@ artifact_type: "{artifact_type}"
 access_tier: "standard"
 priority: "high"
 status: "verified"
-created_at: "2026-10-20"
-updated_at: "2026-10-20"
+created_at: "{today_str}"
+updated_at: "{today_str}"
 author:
   role: "architect"
   model: "nvidia/nemotron-3-ultra-550b-a55b"
@@ -284,8 +307,8 @@ topology:
 
 # 📌 `{node_key}` ({node_id}) — 節點標題
 
-1. `[FACT]` 客觀可驗證事實陳述（請確保數量與標頭 `fact_count` 完全一致）。
-2. `[INFERRED]` 根據系統架構推導之設計結論（請確保數量與標頭 `inferred_count` 完全一致）。
+- [FACT] 客觀可驗證事實陳述（⚠️ 標籤必須緊接在列表符號 `- `、`* ` 或 `1. ` 後方行首，不可寫在一般段落、表格內或列表句尾！）。
+- [INFERRED] 根據系統架構推導之設計結論（請確保列表行首包含至少一處 `- [FACT]` 或 `- [INFERRED]`）。
 ```"""
 
 
@@ -345,9 +368,11 @@ def validate_document(
 
     # 3. AS-01: Cross-Model Dialectical Review Check (Anti-Sycophancy)
     status = fm.get("status")
-    orig_model = fm.get("author", {}).get("model", "")
-    rev_model = fm.get("reviewer", {}).get("model", "")
-    verdict = fm.get("reviewer", {}).get("verdict", "")
+    author_obj = fm.get("author") if isinstance(fm.get("author"), dict) else {}
+    reviewer_obj = fm.get("reviewer") if isinstance(fm.get("reviewer"), dict) else {}
+    orig_model = author_obj.get("model", "")
+    rev_model = reviewer_obj.get("model", "")
+    verdict = reviewer_obj.get("verdict", "")
 
     if status in ("verified", "archived"):
         if orig_model == rev_model:
@@ -360,7 +385,7 @@ def validate_document(
             )
 
     # 4. AS-02: Epistemic Tag Honesty Check
-    profile = fm.get("epistemic_profile", {})
+    profile = fm.get("epistemic_profile") if isinstance(fm.get("epistemic_profile"), dict) else {}
     actual_counts: Dict[str, int] = {}
     for key, pattern in EPISTEMIC_TAGS.items():
         actual = len(pattern.findall(body))
@@ -368,7 +393,7 @@ def validate_document(
         declared = profile.get(key, -1)
         if actual != declared:
             errors.append(
-                f"[AS-02 Epistemic Honesty] 內文標籤數量與標頭宣告不符：{key} 宣告為 {declared}，但內文實際出現 {actual} 次。"
+                f"[AS-02 Epistemic Honesty] 內文標籤數量與標頭宣告不符：{key} 宣告為 {declared}，但內文實際匹配 {actual} 次（⚠️ 標籤必須位於 Markdown 列表行首，如 `- [FACT] 內容...` 或 `1. [INFERRED] 內容...`；寫在一般段落、表格內或列表句尾均不計入）。"
             )
 
     if status in ("verified", "archived"):
@@ -378,11 +403,12 @@ def validate_document(
             )
         if actual_counts.get("fact_count", 0) + actual_counts.get("inferred_count", 0) == 0:
             errors.append(
-                f"[AS-02 Epistemic Gate] 記憶節點內文必須至少包含一處 [FACT] 或 [INFERRED] 標記。"
+                f"[AS-02 Epistemic Gate] 記憶節點內文必須至少包含一處位於 Markdown 列表行首的 [FACT] 或 [INFERRED] 標記（格式範例：`- [FACT] 內容...` 或 `1. [INFERRED] 內容...`；寫在純文字段落、表格內或列表句尾均不計入！）。"
             )
 
     # 5. AS-03: Affected Paths & Falsifiable Oracle Check
-    for rel_path in fm.get("topology", {}).get("affected_paths", []):
+    topo = fm.get("topology") if isinstance(fm.get("topology"), dict) else {}
+    for rel_path in (topo.get("affected_paths") if isinstance(topo.get("affected_paths"), list) else []):
         target = (project_root / rel_path).resolve()
         if not target.exists():
             errors.append(
@@ -390,7 +416,6 @@ def validate_document(
             )
 
     # 6. Stage 4: AS-06 Supersedes & Mutual Exclusion Check (single-file or batch)
-    topo = fm.get("topology", {})
     if topo.get("supersedes") or topo.get("conflicts_with"):
         lookup_nodes = dict(all_nodes) if all_nodes is not None else load_all_memory_nodes(project_root)
         node_id = fm.get("node_id", md_path.stem)

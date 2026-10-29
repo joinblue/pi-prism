@@ -267,6 +267,59 @@ interface DispatchDefaults {
 	thinkingLevel?: ThinkingLevel;
 }
 
+const SUBAGENT_ROLE_FALLBACKS: Record<string, string[]> = {
+	scout: [
+		"nvidia/z-ai/glm-5.3-flash",
+		"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/deepseek-ai/deepseek-v4.1-flash",
+		"nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+	],
+	architect: [
+		"nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/deepseek-ai/deepseek-v4.1-flash",
+		"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/z-ai/glm-5.3-flash",
+	],
+	challenger: [
+		"nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/deepseek-ai/deepseek-v4.1-flash",
+		"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/z-ai/glm-5.3-flash",
+	],
+	worker: [
+		"nvidia/poolside/laguna-xs-2.1",
+		"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/deepseek-ai/deepseek-v4.1-flash",
+		"nvidia/z-ai/glm-5.3-flash",
+	],
+	code: [
+		"nvidia/poolside/laguna-xs-2.1",
+		"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/deepseek-ai/deepseek-v4.1-flash",
+		"nvidia/z-ai/glm-5.3-flash",
+	],
+	auditor: [
+		"nvidia/z-ai/glm-5.3-flash",
+		"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/deepseek-ai/deepseek-v4.1-flash",
+	],
+	audit: [
+		"nvidia/z-ai/glm-5.3-flash",
+		"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b",
+		"nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+		"nvidia/deepseek-ai/deepseek-v4.1-flash",
+	],
+};
+
+function isRetriableSubagentModelError(reason: string): boolean {
+	return /resource[_\s-]?exhausted|worker local total request limit reached|limit reached|\b429\b|\b502\b|\b503\b|\b504\b|\b410\b|\b404\b|rate[_\s-]?limit|timeout|overloaded/i.test(
+		reason,
+	);
+}
+
 async function runSingleAgent(
 	defaultCwd: string,
 	dispatchDefaults: DispatchDefaults,
@@ -295,14 +348,13 @@ async function runSingleAgent(
 		};
 	}
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session"];
 	const inheritsDispatchConfig = !agent.model;
-	const model = agent.model ?? dispatchDefaults.model;
-	if (model) args.push("--model", model);
-	if (inheritsDispatchConfig && dispatchDefaults.thinkingLevel) {
-		args.push("--thinking", dispatchDefaults.thinkingLevel);
-	}
-	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+	const primaryModel = agent.model ?? dispatchDefaults.model;
+	const roleFallbacks = SUBAGENT_ROLE_FALLBACKS[agentName] ?? [];
+	const candidateModels: Array<string | undefined> =
+		primaryModel || roleFallbacks.length > 0
+			? Array.from(new Set([primaryModel, ...roleFallbacks].filter((m): m is string => Boolean(m && m.trim()))))
+			: [undefined];
 
 	let tmpPromptDir: string | null = null;
 	let tmpPromptPath: string | null = null;
@@ -315,7 +367,7 @@ async function runSingleAgent(
 		messages: [],
 		stderr: "",
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-		model,
+		model: candidateModels[0],
 		step,
 	};
 
@@ -333,93 +385,120 @@ async function runSingleAgent(
 			const tmp = await writePromptToTempFile(agent.name, agent.systemPrompt);
 			tmpPromptDir = tmp.dir;
 			tmpPromptPath = tmp.filePath;
-			args.push("--append-system-prompt", tmpPromptPath);
 		}
 
-		args.push(`Task: ${task}`);
 		let wasAborted = false;
 
-		const exitCode = await new Promise<number>((resolve) => {
-			const invocation = getPiInvocation(args);
-			const proc = spawn(invocation.command, invocation.args, {
-				cwd: cwd ?? defaultCwd,
-				shell: false,
-				stdio: ["ignore", "pipe", "pipe"],
-			});
-			let buffer = "";
-
-			const processLine = (line: string) => {
-				if (!line.trim()) return;
-				let event: any;
-				try {
-					event = JSON.parse(line);
-				} catch {
-					return;
-				}
-
-				if (event.type === "message_end" && event.message) {
-					const msg = event.message as Message;
-					currentResult.messages.push(msg);
-
-					if (msg.role === "assistant") {
-						currentResult.usage.turns++;
-						const usage = msg.usage;
-						if (usage) {
-							currentResult.usage.input += usage.input || 0;
-							currentResult.usage.output += usage.output || 0;
-							currentResult.usage.cacheRead += usage.cacheRead || 0;
-							currentResult.usage.cacheWrite += usage.cacheWrite || 0;
-							currentResult.usage.cost += usage.cost?.total || 0;
-							currentResult.usage.contextTokens = usage.totalTokens || 0;
-						}
-						if (!currentResult.model && msg.model) currentResult.model = msg.model;
-						if (msg.stopReason) currentResult.stopReason = msg.stopReason;
-						if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
-					}
-					emitUpdate();
-				}
-
-				if (event.type === "tool_result_end" && event.message) {
-					currentResult.messages.push(event.message as Message);
-					emitUpdate();
-				}
-			};
-
-			proc.stdout.on("data", (data) => {
-				buffer += data.toString();
-				const lines = buffer.split("\n");
-				buffer = lines.pop() || "";
-				for (const line of lines) processLine(line);
-			});
-
-			proc.stderr.on("data", (data) => {
-				currentResult.stderr += data.toString();
-			});
-
-			proc.on("close", (code) => {
-				if (buffer.trim()) processLine(buffer);
-				resolve(code ?? 0);
-			});
-
-			proc.on("error", () => {
-				resolve(1);
-			});
-
-			if (signal) {
-				const killProc = () => {
-					wasAborted = true;
-					proc.kill("SIGTERM");
-					setTimeout(() => {
-						if (!proc.killed) proc.kill("SIGKILL");
-					}, 5000);
-				};
-				if (signal.aborted) killProc();
-				else signal.addEventListener("abort", killProc, { once: true });
+		for (let attemptIdx = 0; attemptIdx < candidateModels.length; attemptIdx++) {
+			const candidateModel = candidateModels[attemptIdx];
+			currentResult.model = candidateModel;
+			if (attemptIdx > 0) {
+				currentResult.messages = [];
+				currentResult.stderr = "";
+				currentResult.stopReason = undefined;
+				currentResult.errorMessage = undefined;
 			}
-		});
 
-		currentResult.exitCode = exitCode;
-		if (wasAborted) throw new Error("Subagent was aborted");
+			const args: string[] = ["--mode", "json", "-p", "--no-session"];
+			if (candidateModel) args.push("--model", candidateModel);
+			if (inheritsDispatchConfig && dispatchDefaults.thinkingLevel) {
+				args.push("--thinking", dispatchDefaults.thinkingLevel);
+			}
+			if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+			if (tmpPromptPath) {
+				args.push("--append-system-prompt", tmpPromptPath);
+			}
+			args.push(`Task: ${task}`);
+
+			const exitCode = await new Promise<number>((resolve) => {
+				const invocation = getPiInvocation(args);
+				const proc = spawn(invocation.command, invocation.args, {
+					cwd: cwd ?? defaultCwd,
+					shell: false,
+					stdio: ["ignore", "pipe", "pipe"],
+				});
+				let buffer = "";
+
+				const processLine = (line: string) => {
+					if (!line.trim()) return;
+					let event: any;
+					try {
+						event = JSON.parse(line);
+					} catch {
+						return;
+					}
+
+					if (event.type === "message_end" && event.message) {
+						const msg = event.message as Message;
+						currentResult.messages.push(msg);
+
+						if (msg.role === "assistant") {
+							currentResult.usage.turns++;
+							const usage = msg.usage;
+							if (usage) {
+								currentResult.usage.input += usage.input || 0;
+								currentResult.usage.output += usage.output || 0;
+								currentResult.usage.cacheRead += usage.cacheRead || 0;
+								currentResult.usage.cacheWrite += usage.cacheWrite || 0;
+								currentResult.usage.cost += usage.cost?.total || 0;
+								currentResult.usage.contextTokens = usage.totalTokens || 0;
+							}
+							if (!currentResult.model && msg.model) currentResult.model = msg.model;
+							if (msg.stopReason) currentResult.stopReason = msg.stopReason;
+							if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
+						}
+						emitUpdate();
+					}
+
+					if (event.type === "tool_result_end" && event.message) {
+						currentResult.messages.push(event.message as Message);
+						emitUpdate();
+					}
+				};
+
+				proc.stdout.on("data", (data) => {
+					buffer += data.toString();
+					const lines = buffer.split("\n");
+					buffer = lines.pop() || "";
+					for (const line of lines) processLine(line);
+				});
+
+				proc.stderr.on("data", (data) => {
+					currentResult.stderr += data.toString();
+				});
+
+				proc.on("close", (code) => {
+					if (buffer.trim()) processLine(buffer);
+					resolve(code ?? 0);
+				});
+
+				proc.on("error", () => {
+					resolve(1);
+				});
+
+				if (signal) {
+					const killProc = () => {
+						wasAborted = true;
+						proc.kill("SIGTERM");
+						setTimeout(() => {
+							if (!proc.killed) proc.kill("SIGKILL");
+						}, 5000);
+					};
+					if (signal.aborted) killProc();
+					else signal.addEventListener("abort", killProc, { once: true });
+				}
+			});
+
+			currentResult.exitCode = exitCode;
+			if (wasAborted) throw new Error("Subagent was aborted");
+
+			const failed = exitCode !== 0 || currentResult.stopReason === "error" || Boolean(currentResult.errorMessage);
+			const combinedReason = `${currentResult.errorMessage ?? ""}\n${currentResult.stderr ?? ""}`;
+			if (failed && attemptIdx < candidateModels.length - 1 && isRetriableSubagentModelError(combinedReason)) {
+				continue;
+			}
+			break;
+		}
 		return currentResult;
 	} finally {
 		if (tmpPromptPath)

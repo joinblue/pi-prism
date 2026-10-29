@@ -1,6 +1,6 @@
 # 🗺️ PotoTypeV0 × Friday Context Registry & Topology Map (CONTEXT_MAP.md)
 
-> **自動生成時間**: `2026-10-29T04:22:24Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `12`
+> **自動生成時間**: `2026-10-29T16:43:57Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `13`
 > **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入活躍節點 (`verified`/`draft`) 之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。
 
 ## 1. 領域分層索引表 (Domain Layer Registry 000–900)
@@ -15,7 +15,7 @@
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
-| `100.ARCH-RULES.v1` | `MEM-2026-0002` | `rule` | `verified` | `deepseek-ai/deepseek-v4.1-flash` ➔ `z-ai/glm-5.3` | 定義 Friday Harness 之工作區邊界護欄：鎖定 ctx.cwd、保護 .Friday 大腦核心 (SEC-BRAIN)、隔離金鑰 (SEC-CRED) 與攔截危險指令。 | [100_ARCH_RULES.md](100_ARCH_RULES.md) |
+| `100.ARCH-RULES.v1` | `MEM-2026-0002` | `rule` | `verified` | `deepseek-ai/deepseek-v4.1-flash` ➔ `z-ai/glm-5.3` | 定義 Friday Harness 之工作區邊界護欄：鎖定 ctx.cwd、保護 .Friday 大腦核心 (SEC-BRAIN)、隔離金鑰 (SEC-CRED)、根目錄 .md 保護 (SEC-DOC-GOVERNANCE) 與攔截危險指令。 | [100_ARCH_RULES.md](100_ARCH_RULES.md) |
 
 ### 🧩 `200` — 200 架構決策與跨模型審查 (Architecture Decisions & Cross-Review)
 
@@ -38,6 +38,7 @@
 | `510.MODEL-POOL-PLANNING.v1` | `MEM-2026-0012` | `spec` | `verified` | `nvidia/nemotron-3-ultra-550b-a55b` ➔ `deepseek-ai/deepseek-v4.1-flash` | NVIDIA 模型庫強項分配與被動斷路器 (Passive Circuit Breaker) 策略規範，釐清 models.json 與 models-store.json 定位，並定義不干擾 KV Cache 與 40 RPM 配額之健康管理。 | [510.MODEL-POOL-PLANNING.v1.md](../specs/510.MODEL-POOL-PLANNING.v1.md) |
 | `500.ROUTER-V2-MULTITURN.v1` | `MEM-2026-0010` | `spec` | `verified` | `google-vertex/gemini-4-argon` ➔ `nvidia/nemotron-3-ultra-550b-a55b` | Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。 | [610_ROUTER_V2_REDESIGN.md](../specs/610_ROUTER_V2_REDESIGN.md) |
 | `500.PULSE-SCHEDULER.v1` | `MEM-2026-0011` | `spec` | `draft` | `google-vertex/gemini-4-argon` ➔ `deepseek-ai/deepseek-v4.1-flash` | Friday Pulse 智慧背景排程初步藍圖：定義定時/事件/動態心跳三模態觸發、免費 Scout 前哨過濾與收件匣隔離簽核機制。 | [620_FRIDAY_PULSE_SCHEDULER_SPEC.md](../specs/620_FRIDAY_PULSE_SCHEDULER_SPEC.md) |
+| `500.HARNESS-DETAX.v1` | `MEM-2026-0014` | `spec` | `verified` | `google-vertex/gemini-4-argon` ➔ `nvidia/nemotron-3-ultra-550b-a55b` | Friday 框架減稅與正交重構規格：消除雙重抽稅、賦予專家唯讀視野、收斂 SEC-DOC-GOVERNANCE 為根目錄保護並重構精簡角色 Prompt。 | [630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md](../specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md) |
 
 ### 🧩 `600` — 600 驗證斷言、測試與安全稽核 (Verification Oracles & Audits)
 
@@ -58,6 +59,7 @@
 flowchart TD
     MEM_2026_0008["MEM-2026-0008"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0008["MEM-2026-0008"] -->|"depends_on"| MEM_2026_0007["MEM-2026-0007"]
+    MEM_2026_0008["MEM-2026-0008"] -->|"depends_on"| MEM_2026_0014["MEM-2026-0014"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0003["MEM-2026-0003"]
@@ -84,6 +86,10 @@ flowchart TD
     MEM_2026_0011["MEM-2026-0011"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
     MEM_2026_0011["MEM-2026-0011"] -->|"depends_on"| MEM_2026_0007["MEM-2026-0007"]
     MEM_2026_0011["MEM-2026-0011"] -->|"depends_on"| MEM_2026_0010["MEM-2026-0010"]
+    MEM_2026_0014["MEM-2026-0014"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
+    MEM_2026_0014["MEM-2026-0014"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
+    MEM_2026_0014["MEM-2026-0014"] -->|"depends_on"| MEM_2026_0010["MEM-2026-0010"]
+    MEM_2026_0014["MEM-2026-0014"] -->|"depends_on"| MEM_2026_0005["MEM-2026-0005"]
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0003["MEM-2026-0003"]

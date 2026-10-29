@@ -5,7 +5,7 @@ access_tier: "immutable"
 priority: "critical"
 status: "verified"
 created_at: "2026-10-16"
-updated_at: "2026-10-16"
+updated_at: "2026-10-29"
 author:
   role: "architect"
   model: "deepseek-ai/deepseek-v4.1-flash"
@@ -65,4 +65,4 @@ topology:
 ## 三、 漸進式 Context 揭露鐵律 (Progressive Disclosure)
 
 1. `[FACT]` 本專案採用「治理標頭 (`artifact_header.schema.json`) × Context 拓撲節點 (`context_node.schema.json`)」雙軌合一之 YAML Frontmatter。
-2. `[INFERRED]` Agent 啟動時僅注入 `memory/index/CONTEXT_INDEX.json` 之 `summary_1line` 單行摘要，按需透過 `read` 調閱對應節點，確保 Context Window 高效純淨。
+2. `[INFERRED]` Agent 啟動時僅注入公開 `memory/index/CONTEXT_INDEX.json`（與本地私有 `PRIVATE_INDEX.json`，若存在）之 `summary_1line` 單行摘要，按需透過 `read` 調閱對應節點，確保 Context Window 高效純淨。

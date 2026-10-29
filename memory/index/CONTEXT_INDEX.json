@@ -2,8 +2,8 @@
   "schema_version": "2.2.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-29T04:22:24Z",
-  "total_nodes": 12,
+  "generated_at": "2026-10-29T16:43:57Z",
+  "total_nodes": 13,
   "healed_links": [],
   "pending_topology_alignments": [],
   "domain_registry": {
@@ -30,7 +30,7 @@
           ],
           "summary_1line": "Friday Agentic Harness 核心憲法：定義四級認知誠實標籤、跨模型對抗審查與獨立驗證斷言 (Oracle) 鐵律。",
           "path": "memory/codex/000_SOUL.md",
-          "sha256_16": "961c54f997796e4f",
+          "sha256_16": "eac4da316749774b",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [],
@@ -61,11 +61,12 @@
           "keywords": [
             "Workspace Boundary Guard",
             "SEC-BRAIN",
-            "SEC-CRED"
+            "SEC-CRED",
+            "SEC-DOC-GOVERNANCE"
           ],
-          "summary_1line": "定義 Friday Harness 之工作區邊界護欄：鎖定 ctx.cwd、保護 .Friday 大腦核心 (SEC-BRAIN)、隔離金鑰 (SEC-CRED) 與攔截危險指令。",
+          "summary_1line": "定義 Friday Harness 之工作區邊界護欄：鎖定 ctx.cwd、保護 .Friday 大腦核心 (SEC-BRAIN)、隔離金鑰 (SEC-CRED)、根目錄 .md 保護 (SEC-DOC-GOVERNANCE) 與攔截危險指令。",
           "path": "memory/codex/100_ARCH_RULES.md",
-          "sha256_16": "4c2c5e3a5785d7cd",
+          "sha256_16": "7a9090472764df54",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -136,7 +137,7 @@
           ],
           "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
           "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md",
-          "sha256_16": "952a2ff966ebec19",
+          "sha256_16": "fdfafb4ca7f26606",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -184,15 +185,17 @@
           ],
           "summary_1line": "專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。",
           "path": "memory/LEDGER.md",
-          "sha256_16": "7bd224983b8e80f5",
+          "sha256_16": "3fdba1e657e8b09f",
           "author_model": "google-vertex/gemini-4-argon",
           "reviewer_model": "deepseek-ai/deepseek-v4.1-flash",
           "depends_on": [
             "000.SOUL.v1",
-            "200.OPT-ROADMAP.v1"
+            "200.OPT-ROADMAP.v1",
+            "500.HARNESS-DETAX.v1"
           ],
           "affected_paths": [
             "memory/specs/200_OPTIMIZATION_ROADMAP.md",
+            "memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md",
             ".Friday/extensions/workspace-guard.ts",
             ".Friday/extensions/model-router.ts"
           ]
@@ -206,7 +209,7 @@
     },
     "500": {
       "title": "500 動態模型路由與子代理編排 (Model Routing & Subagents)",
-      "count": 4,
+      "count": 5,
       "items": [
         {
           "node_id": "MEM-2026-0006",
@@ -381,6 +384,51 @@
             ".Friday/extensions/workspace-guard.ts",
             "memory/LEDGER.md"
           ]
+        },
+        {
+          "node_id": "MEM-2026-0014",
+          "artifact_type": "spec",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "high",
+          "domain_code": "500",
+          "node_key": "500.HARNESS-DETAX.v1",
+          "facet_tags": [
+            "Friday:Architecture:Spec:DetaxOrthogonality",
+            "PotoTypeV0:Optimization:Context:PromptEngineering"
+          ],
+          "keywords": [
+            "Framework Tax",
+            "Double Taxation",
+            "Silent Guardrails",
+            "Dispatch Specialist Tools",
+            "SEC-DOC-GOVERNANCE",
+            "PRIVATE_INDEX"
+          ],
+          "summary_1line": "Friday 框架減稅與正交重構規格：消除雙重抽稅、賦予專家唯讀視野、收斂 SEC-DOC-GOVERNANCE 為根目錄保護並重構精簡角色 Prompt。",
+          "path": "memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md",
+          "sha256_16": "95f037a7a6078e44",
+          "author_model": "google-vertex/gemini-4-argon",
+          "reviewer_model": "nvidia/nemotron-3-ultra-550b-a55b",
+          "depends_on": [
+            "000.SOUL.v1",
+            "100.ARCH-RULES.v1",
+            "500.ROUTER-V2-MULTITURN.v1",
+            "700.HARNESS-BLUEPRINT.v1"
+          ],
+          "affected_paths": [
+            ".Friday/AGENTS.md",
+            ".Friday/agents/architect.md",
+            ".Friday/agents/challenger.md",
+            ".Friday/agents/scout.md",
+            ".Friday/agents/worker.md",
+            ".Friday/agents/auditor.md",
+            ".Friday/extensions/model-router.ts",
+            ".Friday/extensions/workspace-guard.ts",
+            ".Friday/extensions/epistemic-gate.ts",
+            "schemas/schema_validator.py",
+            "scripts/auto_update_map.py"
+          ]
         }
       ]
     },
@@ -487,7 +535,7 @@
           ],
           "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
           "path": "memory/specs/700_HARNESS_BLUEPRINT.md",
-          "sha256_16": "f1b3c570e4901c79",
+          "sha256_16": "e3943ac8f7b83bf7",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -527,6 +575,11 @@
     {
       "from": "MEM-2026-0008",
       "to": "MEM-2026-0007",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0008",
+      "to": "MEM-2026-0014",
       "relation": "depends_on"
     },
     {
@@ -657,6 +710,26 @@
     {
       "from": "MEM-2026-0011",
       "to": "MEM-2026-0010",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0014",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0014",
+      "to": "MEM-2026-0002",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0014",
+      "to": "MEM-2026-0010",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0014",
+      "to": "MEM-2026-0005",
       "relation": "depends_on"
     },
     {

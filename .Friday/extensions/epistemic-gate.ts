@@ -18,29 +18,39 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export function buildProgressiveContextSummary(cwd: string): string | null {
 	const indexPath = path.join(cwd, "memory", "index", "CONTEXT_INDEX.json");
-	if (!fs.existsSync(indexPath)) return null;
+	const privateIndexPath = path.join(cwd, "memory", "index", "PRIVATE_INDEX.json");
+	if (!fs.existsSync(indexPath) && !fs.existsSync(privateIndexPath)) return null;
 
 	try {
-		const raw = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
+		const raw = fs.existsSync(indexPath) ? JSON.parse(fs.readFileSync(indexPath, "utf-8")) : {};
+		const privateRaw = fs.existsSync(privateIndexPath) ? JSON.parse(fs.readFileSync(privateIndexPath, "utf-8")) : null;
 		const registry = raw.domain_registry ?? {};
 		const itemLines: string[] = [];
 		let activeCount = 0;
 		let isolatedCount = 0;
 
-		for (const [code, section] of Object.entries<any>(registry)) {
-			const items = section?.items ?? [];
-			if (!Array.isArray(items) || items.length === 0) continue;
-			for (const item of items) {
-				// Stage 5: Active-Only Injection (automatically isolate archived & deprecated nodes)
-				if (item.status === "archived" || item.status === "deprecated") {
-					isolatedCount++;
-					continue;
+		const collectRegistry = (reg: Record<string, any>, isPrivate = false) => {
+			for (const [code, section] of Object.entries<any>(reg)) {
+				const items = section?.items ?? [];
+				if (!Array.isArray(items) || items.length === 0) continue;
+				for (const item of items) {
+					// Stage 5: Active-Only Injection (automatically isolate archived & deprecated nodes)
+					if (item.status === "archived" || item.status === "deprecated") {
+						isolatedCount++;
+						continue;
+					}
+					activeCount++;
+					const tag = isPrivate ? "🔒PRIVATE | " : "";
+					itemLines.push(
+						`- [${tag}${code} | ${item.node_key} | ${item.node_id} (${item.artifact_type}/${item.status})] ${item.summary_1line} -> \`${item.path}\``,
+					);
 				}
-				activeCount++;
-				itemLines.push(
-					`- [${code} | ${item.node_key} | ${item.node_id} (${item.artifact_type}/${item.status})] ${item.summary_1line} -> \`${item.path}\``,
-				);
 			}
+		};
+
+		collectRegistry(registry, false);
+		if (privateRaw?.domain_registry) {
+			collectRegistry(privateRaw.domain_registry, true);
 		}
 
 		const lines: string[] = [
@@ -51,9 +61,10 @@ export function buildProgressiveContextSummary(cwd: string): string | null {
 			...itemLines,
 		];
 
-		const pendingAlignments = Array.isArray(raw.pending_topology_alignments)
-			? raw.pending_topology_alignments
-			: [];
+		const pendingAlignments = [
+			...(Array.isArray(raw.pending_topology_alignments) ? raw.pending_topology_alignments : []),
+			...(Array.isArray(privateRaw?.pending_topology_alignments) ? privateRaw.pending_topology_alignments : []),
+		];
 		if (pendingAlignments.length > 0) {
 			lines.push("");
 			lines.push("⚠️ [Pending Topology Alignment | 跨文件潛在規格衝突與待收斂提醒 (supersedes/conflicts_with 留空監測)]:");
@@ -75,31 +86,36 @@ export function findAffectedMemoryNodes(
 	cwd: string,
 	relFilePath: string,
 ): Array<{ node_id: string; node_key: string; path: string; summary_1line: string }> {
-	const indexPath = path.join(cwd, "memory", "index", "CONTEXT_INDEX.json");
-	if (!fs.existsSync(indexPath)) return [];
+	const indexPaths = [
+		path.join(cwd, "memory", "index", "CONTEXT_INDEX.json"),
+		path.join(cwd, "memory", "index", "PRIVATE_INDEX.json"),
+	].filter((p) => fs.existsSync(p));
+	if (indexPaths.length === 0) return [];
 	try {
-		const raw = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
-		const registry = raw.domain_registry ?? {};
 		const matches: Array<{ node_id: string; node_key: string; path: string; summary_1line: string }> = [];
 		const normalizedTarget = relFilePath.replace(/\\/g, "/").replace(/^\.\//, "");
 
-		for (const section of Object.values<any>(registry)) {
-			const items = section?.items ?? [];
-			if (!Array.isArray(items)) continue;
-			for (const item of items) {
-				if (item.status === "archived" || item.status === "deprecated") continue;
-				const affected: string[] = Array.isArray(item.affected_paths) ? item.affected_paths : [];
-				const isAffected = affected.some((ap) => {
-					const normAp = String(ap).replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
-					return normalizedTarget === normAp || normalizedTarget.startsWith(`${normAp}/`);
-				});
-				if (isAffected) {
-					matches.push({
-						node_id: String(item.node_id ?? ""),
-						node_key: String(item.node_key ?? ""),
-						path: String(item.path ?? ""),
-						summary_1line: String(item.summary_1line ?? ""),
+		for (const indexPath of indexPaths) {
+			const raw = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
+			const registry = raw.domain_registry ?? {};
+			for (const section of Object.values<any>(registry)) {
+				const items = section?.items ?? [];
+				if (!Array.isArray(items)) continue;
+				for (const item of items) {
+					if (item.status === "archived" || item.status === "deprecated") continue;
+					const affected: string[] = Array.isArray(item.affected_paths) ? item.affected_paths : [];
+					const isAffected = affected.some((ap) => {
+						const normAp = String(ap).replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
+						return normalizedTarget === normAp || normalizedTarget.startsWith(`${normAp}/`);
 					});
+					if (isAffected) {
+						matches.push({
+							node_id: String(item.node_id ?? ""),
+							node_key: String(item.node_key ?? ""),
+							path: String(item.path ?? ""),
+							summary_1line: String(item.summary_1line ?? ""),
+						});
+					}
 				}
 			}
 		}

@@ -5,7 +5,7 @@ access_tier: "standard"
 priority: "high"
 status: "verified"
 created_at: "2026-10-18"
-updated_at: "2026-10-20"
+updated_at: "2026-10-29"
 author:
   role: "architect"
   model: "google-vertex/gemini-4-argon"
@@ -39,12 +39,14 @@ topology:
   depends_on:
     - "000.SOUL.v1"
     - "200.OPT-ROADMAP.v1"
+    - "500.HARNESS-DETAX.v1"
   supersedes: []
   conflicts_with: []
   verified_by:
     - "schemas/schema_validator.py"
   affected_paths:
     - "memory/specs/200_OPTIMIZATION_ROADMAP.md"
+    - "memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md"
     - ".Friday/extensions/workspace-guard.ts"
     - ".Friday/extensions/model-router.ts"
 ---
@@ -70,3 +72,4 @@ topology:
 | **WO-2026-S5** | Stage 5：`auto_update_map.py` 死鏈/AST + `epistemic-gate.ts` 警報 | ✅ 已完成 | `worker` / `auditor` | `test_friday_architecture.py` (Suite 10) |
 | **WO-2026-S6** | Stage 6：`/dream` 三階段睡眠記憶鞏固 + 退出微夢境 | ⏳ 待執行 | `architect` / `auditor` | Stage 6 Dream Pipeline E2E Tests |
 | **WO-2026-P1** | Friday Pulse (`500.PULSE-SCHEDULER.v1`)：定時/事件/動態心跳三模態背景排程、免費 Scout 前哨過濾與 `/pulse` 收件匣 | 📝 藍圖草案 (`MEM-2026-0011`) | `architect` / `worker` | `memory/specs/620_FRIDAY_PULSE_SCHEDULER_SPEC.md` |
+| **WO-2026-D1** | Harness Detax (`500.HARNESS-DETAX.v1` / `MEM-2026-0014`)：公私索引分流 (`PRIVATE_INDEX.json`) 與 D1~D5 框架減稅正交重構（根目錄 `SEC-DOC-GOVERNANCE`、專家唯讀視野、沉默護欄、Prompt 精煉與按需處方籤） | ✅ 已完成 | `architect` / `worker` | `memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md` + `test_friday_architecture.py` |

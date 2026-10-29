@@ -271,7 +271,15 @@ def sync_governed_markdown(
             except KeyError:
                 pass
 
-    if counts_changed or result["ssot_table_updated"]:
+    date_changed = False
+    if str(fm.get("created_at", "")) > today_str:
+        try:
+            new_raw_fm = surgical_set_scalar(new_raw_fm, "created_at", today_str)
+            date_changed = True
+        except KeyError:
+            pass
+
+    if counts_changed or result["ssot_table_updated"] or date_changed or str(fm.get("updated_at", "")) != today_str:
         try:
             new_raw_fm = surgical_set_scalar(new_raw_fm, "updated_at", today_str)
         except KeyError:

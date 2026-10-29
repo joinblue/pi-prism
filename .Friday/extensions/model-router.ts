@@ -15,9 +15,10 @@
  *    and injects dynamic `[MANDATE]` directives on `before_agent_start`.
  */
 
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type ImageContent, type Message, StringEnum, type TextContent } from "@earendil-works/pi-ai";
+import { type ImageContent, type Message, StringEnum, type TextContent, type Tool } from "@earendil-works/pi-ai";
 import {
 	detectSupportedImageMimeTypeFromFile,
 	type ExtensionAPI,
@@ -73,9 +74,9 @@ export const ROLE_FALLBACK_CHAINS: Record<SpecialistRole, string[]> = {
 	],
 	challenger: [
 		"deepseek-ai/deepseek-v4.1-flash",
+		"nvidia/nemotron-3.5-lightning-30b-a3b",
 		"nvidia/nemotron-3-ultra-550b-a55b",
 		"nvidia/nemotron-3.5-super-vl-120b-a12b",
-		"nvidia/nemotron-3.5-lightning-30b-a3b",
 		"z-ai/glm-5.3-flash",
 	],
 	code: [
@@ -492,33 +493,310 @@ function loadCompactIndexSummary(cwd: string): string {
 
 function buildSpecialistSystemPrompt(role: SpecialistRole): string {
 	const modelSpec = ROLE_MODELS[role];
+	const brevityRule =
+		"輸出規範 (Brevity Cap): 嚴格控制在 <= 300 words 以內，僅使用高密度條列式重點 (High-Density Bullet Points)，禁止客套寒暄、重複抄寫題目或冗長三段式官僚表格。";
 	const prompts: Record<SpecialistRole, string> = {
 		scout: [
 			`你是 Friday 團隊中的 Scout (高速情報探索員)，搭載 ${modelSpec}。`,
 			"職責：快速檢索摘要、定位關鍵結構與事實，所有客觀結論必須標註 [FACT]，推論標註 [INFERRED]，保持極簡高信噪比。",
+			brevityRule,
 		].join("\n"),
 		architect: [
 			`你是 Friday 團隊中的 Architect (首席系統架構師)，搭載 ${modelSpec} 旗艦推理模型。`,
-			"職責：擬定結構嚴謹的系統設計與 ADR 決策，明確區分 [FACT]、[INFERRED] 與 [HYPOTHESIS]，並定義可證偽驗證條件 (falsifiable_criterion)。",
+			"職責：依據附加之真實檔案與目錄快照擬定精準系統設計與 ADR 決策，明確區分 [FACT]、[INFERRED] 與 [HYPOTHESIS]，並定義可證偽驗證條件 (falsifiable_criterion)。禁止輸出無效之 shell 指令區塊（如 cat -n）。",
+			brevityRule,
 		].join("\n"),
 		challenger: [
 			`你是 Friday 團隊中的 Challenger (跨模型紅隊對抗審查官)，搭載 ${modelSpec} 異體推理模型。`,
-			"核心鐵律 (Anti-Sycophancy Protocol)：絕對禁止盲目附和提案者！專職找出一廂情願的假設、邊界漏洞與未驗證臆測，最後給出 VERDICT: APPROVED 或 VERDICT: CHALLENGED。",
+			"核心鐵律 (Evidence-Based Review & Proportionality)：必須基於附加之真實檔案內容與工作區快照進行實證審查；若原型設計或重構方案邏輯健全且符合當前階段需求，請直接給出 VERDICT: APPROVED。嚴禁無源碼盲猜，嚴禁對單機原型或本地 scratch/ 暫存區提出企業級過度防禦幻想（如安裝 ClamAV 掃毒、分散式事務鎖、要求凍結核心腳本），最後給出 VERDICT: APPROVED 或 VERDICT: CHALLENGED。",
+			brevityRule,
 		].join("\n"),
 		code: [
 			`你是 Friday 團隊中的 Worker/Code Specialist (專精程式碼工程師)，搭載 ${modelSpec} 模型。`,
-			"職責：根據規格與審查意見，產出高品質、無副作用、具備嚴謹錯誤處理的程式碼或修補方案，嚴禁硬編碼本機絕對路徑。",
+			"職責：根據規格與審查意見，直接呼叫內建工具 (read_file, edit_file, write_file, run_syntax_check) 於工作區內完成程式碼修改與語法驗證；修改完成後僅回傳精簡 Diff 摘要（修改檔案、變更行數 +X/-Y、關鍵邏輯與驗證結果，嚴格控制在 <= 200 words），嚴禁將整份修改後的長篇原始碼貼回對話（避免主腦雙重課稅），嚴禁硬編碼本機絕對路徑。",
+			brevityRule,
 		].join("\n"),
 		audit: [
 			`你是 Friday 團隊中的 Auditor (獨立神諭驗收稽核官)，搭載 ${modelSpec} 模型。`,
 			"職責：根據客觀驗證輸出、Schema 規則與測試結果進行嚴格核對，標註 [FACT] 並給出明確驗收結論。",
+			brevityRule,
 		].join("\n"),
 		vision: [
 			`你是 Friday 團隊中的 Vision Specialist (多模態視覺推理專家)，搭載 ${modelSpec} 模型。`,
 			"職責：精確解析圖片、圖表、UI 結構與視覺資訊，標註 [FACT] 與 [INFERRED]，使用繁體中文回報。",
+			brevityRule,
 		].join("\n"),
 	};
 	return prompts[role];
+}
+
+const SPECIALIST_READ_TOOLS: Tool[] = [
+	{
+		name: "read_file",
+		description: "Read lines from a file inside the workspace (max 250 lines per call).",
+		parameters: Type.Object({
+			path: Type.String({ description: "Relative file path inside the workspace" }),
+			startLine: Type.Optional(Type.Number({ description: "1-based start line (default: 1)" })),
+			endLine: Type.Optional(Type.Number({ description: "1-based end line (default: startLine + 200)" })),
+		}),
+	},
+	{
+		name: "list_dir",
+		description: "List files and directories inside a workspace directory.",
+		parameters: Type.Object({
+			path: Type.Optional(Type.String({ description: "Relative directory path (default: '.')" })),
+		}),
+	},
+	{
+		name: "grep_search",
+		description: "Search for a text or regex pattern across files in the workspace.",
+		parameters: Type.Object({
+			pattern: Type.String({ description: "Regex or substring pattern to search for" }),
+			path: Type.Optional(Type.String({ description: "Relative file or directory path to scope the search (default: '.')" })),
+		}),
+	},
+];
+
+const SPECIALIST_CODE_WRITE_TOOLS: Tool[] = [
+	{
+		name: "edit_file",
+		description: "Replace an exact target string with replacement text in an existing workspace file.",
+		parameters: Type.Object({
+			path: Type.String({ description: "Relative file path inside the workspace" }),
+			target: Type.String({ description: "Exact existing snippet to replace" }),
+			replacement: Type.String({ description: "New snippet to insert in place of target" }),
+		}),
+	},
+	{
+		name: "write_file",
+		description: "Create or overwrite a file inside the workspace (protected core dirs .Friday/, schemas/, and root .md are blocked).",
+		parameters: Type.Object({
+			path: Type.String({ description: "Relative file path inside the workspace" }),
+			content: Type.String({ description: "Full content to write to the file" }),
+		}),
+	},
+	{
+		name: "run_syntax_check",
+		description: "Run a fast syntax/compile check on a modified workspace file (.py, .js, .mjs, .json).",
+		parameters: Type.Object({
+			path: Type.String({ description: "Relative file path inside the workspace to syntax-check" }),
+		}),
+	},
+];
+
+export function buildSpecialistTools(role: SpecialistRole): Tool[] {
+	// Only attach interactive tools for `code` specialist (so `code` can directly edit/write/syntax-check files in-process).
+	// Other specialists (`scout`, `architect`, `challenger`, `audit`, `vision`) receive zero-latency TypeScript D2 Auto-Context
+	// (`filePaths` + auto-discovered path contents + directory listings + Workspace Snapshot) in a single-shot request.
+	if (role === "code") return [...SPECIALIST_READ_TOOLS, ...SPECIALIST_CODE_WRITE_TOOLS];
+	return [];
+}
+
+function isSpecialistWriteBlockedPath(relPath: string, absPath: string): string | null {
+	if (isProtectedSecretPath(absPath)) {
+		return `Protected credential file blocked (${relPath})`;
+	}
+	if (
+		relPath === ".Friday" ||
+		relPath.startsWith(".Friday/") ||
+		relPath === "schemas" ||
+		relPath.startsWith("schemas/") ||
+		relPath === "memory/LEDGER.md"
+	) {
+		return `Protected core path blocked for specialist direct write (${relPath})`;
+	}
+	if (!relPath.includes("/") && relPath.toLowerCase().endsWith(".md") && relPath !== "README.md" && relPath !== "AGENTS.md") {
+		return `SEC-DOC-GOVERNANCE: Root-level unmanaged .md file blocked (${relPath}); use scratch/ or memory/`;
+	}
+	return null;
+}
+
+export function executeSpecialistToolCall(
+	role: SpecialistRole,
+	toolName: string,
+	rawArgs: Record<string, any>,
+	rootResolved: string,
+): { output: string; isError: boolean; summary: string } {
+	const resolveInsideWorkspace = (rawP: string): { absPath: string; relPath: string } | { error: string } => {
+		const cleaned = (rawP || ".").trim();
+		const absPath = path.isAbsolute(cleaned) ? path.resolve(cleaned) : path.resolve(rootResolved, cleaned);
+		const inside = absPath === rootResolved || absPath.startsWith(`${rootResolved}${path.sep}`);
+		if (!inside) {
+			return { error: `❌ Out-of-bounds path blocked: ${rawP}` };
+		}
+		if (isProtectedSecretPath(absPath)) {
+			return { error: `❌ Access to protected credential file blocked: ${rawP}` };
+		}
+		const relPath = path.relative(rootResolved, absPath).replace(/\\/g, "/") || ".";
+		return { absPath, relPath };
+	};
+
+	try {
+		if (toolName === "read_file") {
+			const res = resolveInsideWorkspace(String(rawArgs?.path ?? ""));
+			if ("error" in res) return { output: res.error, isError: true, summary: `read_file(${rawArgs?.path}) -> blocked` };
+			if (!fs.existsSync(res.absPath) || !fs.statSync(res.absPath).isFile()) {
+				return {
+					output: `❌ File not found: ${res.relPath}`,
+					isError: true,
+					summary: `read_file(${res.relPath}) -> not found`,
+				};
+			}
+			const allLines = fs.readFileSync(res.absPath, "utf-8").split(/\r?\n/);
+			const startLine = Math.max(1, Number(rawArgs?.startLine ?? 1) || 1);
+			const endLine = Math.min(allLines.length, Math.min(startLine + 249, Number(rawArgs?.endLine ?? startLine + 199) || startLine + 199));
+			const slice = allLines
+				.slice(startLine - 1, endLine)
+				.map((line, idx) => `${startLine + idx}: ${line}`)
+				.join("\n");
+			return {
+				output: `[File: ${res.relPath} (lines ${startLine}-${endLine} of ${allLines.length})]\n${slice}`,
+				isError: false,
+				summary: `read_file(${res.relPath}:L${startLine}-${endLine})`,
+			};
+		}
+
+		if (toolName === "list_dir") {
+			const res = resolveInsideWorkspace(String(rawArgs?.path ?? "."));
+			if ("error" in res) return { output: res.error, isError: true, summary: `list_dir(${rawArgs?.path}) -> blocked` };
+			if (!fs.existsSync(res.absPath) || !fs.statSync(res.absPath).isDirectory()) {
+				return {
+					output: `❌ Directory not found: ${res.relPath}`,
+					isError: true,
+					summary: `list_dir(${res.relPath}) -> not found`,
+				};
+			}
+			const entries = fs.readdirSync(res.absPath, { withFileTypes: true }).slice(0, 80);
+			const formatted = entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)).join("\n");
+			return {
+				output: `[Directory: ${res.relPath}/ (${entries.length} entries)]\n${formatted || "(empty)"}`,
+				isError: false,
+				summary: `list_dir(${res.relPath}/) -> ${entries.length} entries`,
+			};
+		}
+
+		if (toolName === "grep_search") {
+			const patternStr = String(rawArgs?.pattern ?? "").trim();
+			if (!patternStr) {
+				return { output: "❌ Empty grep pattern", isError: true, summary: "grep_search() -> empty pattern" };
+			}
+			const res = resolveInsideWorkspace(String(rawArgs?.path ?? "."));
+			if ("error" in res) return { output: res.error, isError: true, summary: `grep_search(${rawArgs?.path}) -> blocked` };
+			if (!fs.existsSync(res.absPath)) {
+				return { output: `❌ Path not found: ${res.relPath}`, isError: true, summary: `grep_search(${res.relPath}) -> not found` };
+			}
+			let regex: RegExp;
+			try {
+				regex = new RegExp(patternStr, "i");
+			} catch {
+				regex = new RegExp(patternStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+			}
+			const matches: string[] = [];
+			const walk = (currPath: string, depth: number) => {
+				if (matches.length >= 40 || depth > 5) return;
+				const stat = fs.statSync(currPath);
+				if (stat.isFile()) {
+					if (isProtectedSecretPath(currPath) || stat.size > 512 * 1024) return;
+					const rel = path.relative(rootResolved, currPath).replace(/\\/g, "/");
+					const lines = fs.readFileSync(currPath, "utf-8").split(/\r?\n/);
+					for (let idx = 0; idx < lines.length; idx++) {
+						if (regex.test(lines[idx]!)) {
+							matches.push(`${rel}:${idx + 1}: ${lines[idx]!.slice(0, 180)}`);
+							if (matches.length >= 40) break;
+						}
+					}
+					return;
+				}
+				if (stat.isDirectory()) {
+					for (const entry of fs.readdirSync(currPath, { withFileTypes: true })) {
+						if (entry.name === ".git" || entry.name === "node_modules" || entry.name === "sessions") continue;
+						walk(path.join(currPath, entry.name), depth + 1);
+						if (matches.length >= 40) break;
+					}
+				}
+			};
+			walk(res.absPath, 0);
+			return {
+				output: matches.length > 0 ? matches.join("\n") : `(No matches for /${patternStr}/ in ${res.relPath})`,
+				isError: false,
+				summary: `grep_search("${patternStr}", ${res.relPath}) -> ${matches.length} matches`,
+			};
+		}
+
+		if (role === "code" && toolName === "edit_file") {
+			const res = resolveInsideWorkspace(String(rawArgs?.path ?? ""));
+			if ("error" in res) return { output: res.error, isError: true, summary: `edit_file(${rawArgs?.path}) -> blocked` };
+			const blockReason = isSpecialistWriteBlockedPath(res.relPath, res.absPath);
+			if (blockReason) return { output: `❌ ${blockReason}`, isError: true, summary: `edit_file(${res.relPath}) -> blocked` };
+			if (!fs.existsSync(res.absPath) || !fs.statSync(res.absPath).isFile()) {
+				return { output: `❌ File not found: ${res.relPath}`, isError: true, summary: `edit_file(${res.relPath}) -> not found` };
+			}
+			const target = String(rawArgs?.target ?? "");
+			const replacement = String(rawArgs?.replacement ?? "");
+			if (!target) {
+				return { output: "❌ edit_file requires a non-empty target string", isError: true, summary: `edit_file(${res.relPath}) -> empty target` };
+			}
+			const existing = fs.readFileSync(res.absPath, "utf-8");
+			if (!existing.includes(target)) {
+				return {
+					output: `❌ Target snippet not found in ${res.relPath}. Call read_file first to verify exact lines and whitespace.`,
+					isError: true,
+					summary: `edit_file(${res.relPath}) -> target mismatch`,
+				};
+			}
+			const updated = existing.replace(target, replacement);
+			fs.writeFileSync(res.absPath, updated, "utf-8");
+			const removedLines = target.split(/\r?\n/).length;
+			const addedLines = replacement.split(/\r?\n/).length;
+			const msg = `✅ Edited ${res.relPath} (+${addedLines}/-${removedLines} lines)`;
+			return { output: msg, isError: false, summary: msg };
+		}
+
+		if (role === "code" && toolName === "write_file") {
+			const res = resolveInsideWorkspace(String(rawArgs?.path ?? ""));
+			if ("error" in res) return { output: res.error, isError: true, summary: `write_file(${rawArgs?.path}) -> blocked` };
+			const blockReason = isSpecialistWriteBlockedPath(res.relPath, res.absPath);
+			if (blockReason) return { output: `❌ ${blockReason}`, isError: true, summary: `write_file(${res.relPath}) -> blocked` };
+			const content = String(rawArgs?.content ?? "");
+			fs.mkdirSync(path.dirname(res.absPath), { recursive: true });
+			fs.writeFileSync(res.absPath, content, "utf-8");
+			const lineCount = content.split(/\r?\n/).length;
+			const msg = `✅ Wrote ${res.relPath} (${lineCount} lines, ${content.length} bytes)`;
+			return { output: msg, isError: false, summary: msg };
+		}
+
+		if (role === "code" && toolName === "run_syntax_check") {
+			const res = resolveInsideWorkspace(String(rawArgs?.path ?? ""));
+			if ("error" in res) return { output: res.error, isError: true, summary: `run_syntax_check(${rawArgs?.path}) -> blocked` };
+			if (!fs.existsSync(res.absPath) || !fs.statSync(res.absPath).isFile()) {
+				return { output: `❌ File not found: ${res.relPath}`, isError: true, summary: `run_syntax_check(${res.relPath}) -> not found` };
+			}
+			const ext = path.extname(res.absPath).toLowerCase();
+			if (ext === ".py") {
+				execFileSync("python3", ["-m", "py_compile", res.absPath], { cwd: rootResolved, timeout: 10000, stdio: "pipe" });
+			} else if (ext === ".js" || ext === ".mjs" || ext === ".cjs") {
+				execFileSync("node", ["--check", res.absPath], { cwd: rootResolved, timeout: 10000, stdio: "pipe" });
+			} else if (ext === ".json") {
+				JSON.parse(fs.readFileSync(res.absPath, "utf-8"));
+			}
+			const msg = `✅ Syntax check passed: ${res.relPath}`;
+			return { output: msg, isError: false, summary: msg };
+		}
+
+		return {
+			output: `❌ Unknown or unauthorized specialist tool "${toolName}" for role "${role}"`,
+			isError: true,
+			summary: `${toolName} -> unauthorized`,
+		};
+	} catch (err: any) {
+		const stderr = err?.stderr ? String(err.stderr).trim() : "";
+		const msg = stderr || err?.message || String(err);
+		return {
+			output: `❌ Tool ${toolName} failed: ${msg}`,
+			isError: true,
+			summary: `${toolName} -> error (${msg.split("\n")[0]?.slice(0, 80)})`,
+		};
+	}
 }
 
 /**
@@ -801,26 +1079,19 @@ export default function (pi: ExtensionAPI) {
 
 		const mandates: string[] = [];
 		if (STRATEGY_MODE === "apex-commander") {
+			// D3: Silent Guardrails in apex-commander — Only inject a mandate when an image path is explicitly present
+			// (since read() on images is hard-blocked in apex-commander). Multi-file read quotas (max 3/turn) are enforced silently by tool_call.
 			if (extractImagePathFromText(promptText)) {
 				mandates.push(
 					'[MANDATE: 偵測到圖片路徑，嚴禁使用 read 讀取圖片，必須立即呼叫 dispatch_specialist(specialist="vision", imagePath="...", task="...")！]',
 				);
 			}
-			if (/(比對|對照|檢查.*檔案|多個檔案|不一致|衝突|compare|audit.*files)/i.test(promptText)) {
-				mandates.push(
-					'[MANDATE: 偵測到多檔檢索/對比需求，請優先呼叫 dispatch_specialist(specialist="scout"|"challenger", filePaths=[...], task="...") 或 subagent(agent="scout")，禁止主腦逐一 read 所有檔案！]',
-				);
-			}
-			if (/(實作|重構|修改.*程式碼|撰寫.*測試|修復.*bug|implement|refactor)/i.test(promptText)) {
-				mandates.push(
-					'[MANDATE: 偵測到程式碼實作/重構需求，主腦確認架構後請優先委派 subagent(agent="worker", task="...") 於獨立沙盒施工並驗證！]',
-				);
-			}
 		} else if (STRATEGY_MODE === "hybrid-synergy") {
-			const promptWithoutPaths = promptText.replace(/[\w./-]+\.[a-z0-9]{1,5}\b/gi, " ");
-			if (/(架構|設計|重構|演算法|\bADR\b|\barchitecture\b|\brefactor\b|\bdesign\b)/i.test(promptWithoutPaths)) {
+			// D3: Silent Guardrails — Avoid blind per-turn double-taxation on casual mentions of "架構/設計/重構".
+			// Only inject an on-demand reminder when explicitly creating a brand-new core spec from scratch or when the user explicitly requests multi-agent / dialectical review.
+			if (/(新建.*規格|全新.*規格|撰寫.*新規格|雙腦|紅隊|對抗審查|dispatch_specialist|multi-agent|dialectical)/i.test(promptText)) {
 				mandates.push(
-					'[MANDATE (Hybrid-Synergy Mode): 偵測到複雜設計與重構任務，主腦在動手修改前，請先呼叫 dispatch_specialist(specialist="architect"|"challenger") 進行跨模型雙腦推演與紅隊挑刺！]',
+					'[MANDATE (Hybrid-Synergy On-Demand): 若需新建核心規格或執行跨模型雙腦審查，請先確認相關檔案路徑並透過 filePaths 傳入 dispatch_specialist(specialist="architect"|"challenger", filePaths=[...])，避免無上下文盲目空轉。]',
 				);
 			}
 		}
@@ -972,10 +1243,38 @@ export default function (pi: ExtensionAPI) {
 				};
 			}
 
-			// M3: Direct in-process filePaths reading (0 main-brain file-reading tokens)
+			// M3 + D2: Direct in-process filePaths reading + Auto-Context & Directory Vision (0 main-brain file-reading tokens)
+			const rootResolved = path.resolve(ctx.cwd);
 			const attachedFileSections: string[] = [];
+			const seenAbsPaths = new Set<string>();
+
+			// D2(d): Always include a 1-line workspace snapshot showing CONTEXT_INDEX.json, PRIVATE_INDEX.json, and scratch/ contents
+			const ctxIdxExists = fs.existsSync(path.join(rootResolved, "memory", "index", "CONTEXT_INDEX.json"));
+			const privIdxExists = fs.existsSync(path.join(rootResolved, "memory", "index", "PRIVATE_INDEX.json"));
+			const scratchDir = path.join(rootResolved, "scratch");
+			let scratchSnapshot = "missing";
+			if (fs.existsSync(scratchDir) && fs.statSync(scratchDir).isDirectory()) {
+				try {
+					const scratchItems = fs.readdirSync(scratchDir).slice(0, 20);
+					scratchSnapshot = `exists (${scratchItems.length > 0 ? scratchItems.join(", ") : "empty"})`;
+				} catch {
+					scratchSnapshot = "exists";
+				}
+			}
+			const workspaceSnapshotLine = `[Workspace Snapshot]: memory/index/CONTEXT_INDEX.json=${ctxIdxExists ? "exists" : "missing"} | memory/index/PRIVATE_INDEX.json=${privIdxExists ? "exists" : "missing"} | scratch/=${scratchSnapshot}`;
+			attachedFileSections.push(workspaceSnapshotLine);
+
+			const formatDirectoryListing = (dirAbsPath: string, relLabel: string): string => {
+				try {
+					const entries = fs.readdirSync(dirAbsPath, { withFileTypes: true }).slice(0, 50);
+					const formatted = entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)).join(", ");
+					return `--- [Directory: ${relLabel || "."}/] ---\nEntries (${entries.length}): ${formatted || "(empty)"}`;
+				} catch (err: any) {
+					return `--- [Directory: ${relLabel || "."}/] ---\n(Error reading directory: ${err?.message ?? String(err)})`;
+				}
+			};
+
 			if (Array.isArray(params.filePaths) && params.filePaths.length > 0) {
-				const rootResolved = path.resolve(ctx.cwd);
 				for (const rawFilePath of params.filePaths) {
 					const cleaned = rawFilePath.trim();
 					if (!cleaned) continue;
@@ -1004,19 +1303,63 @@ export default function (pi: ExtensionAPI) {
 							isError: true,
 						};
 					}
-					if (!fs.existsSync(absPath) || !fs.statSync(absPath).isFile()) {
+					if (!fs.existsSync(absPath)) {
 						attachedFileSections.push(`--- [File: ${cleaned}] ---\n(File not found: ${absPath})`);
+						continue;
+					}
+					seenAbsPaths.add(absPath);
+					const stat = fs.statSync(absPath);
+					const relLabel = path.relative(rootResolved, absPath).replace(/\\/g, "/");
+					if (stat.isDirectory()) {
+						attachedFileSections.push(formatDirectoryListing(absPath, relLabel));
+						continue;
+					}
+					if (!stat.isFile()) {
+						attachedFileSections.push(`--- [File: ${cleaned}] ---\n(Not a regular file: ${absPath})`);
 						continue;
 					}
 					try {
 						const fileText = fs.readFileSync(absPath, "utf-8");
-						const relLabel = path.relative(rootResolved, absPath).replace(/\\/g, "/");
 						attachedFileSections.push(`--- [File: ${relLabel}] ---\n${fileText}`);
 					} catch (err: any) {
 						attachedFileSections.push(
 							`--- [File: ${cleaned}] ---\n(Error reading file: ${err?.message ?? String(err)})`,
 						);
 					}
+				}
+			}
+
+			// D2(a)-(c): Auto-scan `params.task` for relative paths existing in `ctx.cwd`
+			const combinedTaskText = params.task;
+			const pathRegex = /\b(?:(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]*|AGENTS\.md|README\.md|LEDGER\.md)\b/g;
+			const matchedTokens = Array.from(new Set(combinedTaskText.match(pathRegex) ?? []));
+			let autoDiscoveredFiles = 0;
+			for (const token of matchedTokens) {
+				if (autoDiscoveredFiles >= 6) break;
+				const cleanedToken = token.replace(/[.,;:!?)'"`]+$/, "").trim();
+				if (!cleanedToken) continue;
+				const absPath = path.resolve(rootResolved, cleanedToken);
+				const insideWorkspace =
+					absPath === rootResolved || absPath.startsWith(`${rootResolved}${path.sep}`);
+				if (!insideWorkspace || seenAbsPaths.has(absPath) || isProtectedSecretPath(absPath)) continue;
+				if (!fs.existsSync(absPath)) continue;
+				seenAbsPaths.add(absPath);
+				try {
+					const stat = fs.statSync(absPath);
+					const relLabel = path.relative(rootResolved, absPath).replace(/\\/g, "/");
+					if (stat.isDirectory()) {
+						attachedFileSections.push(formatDirectoryListing(absPath, relLabel));
+					} else if (stat.isFile()) {
+						const rawText = fs.readFileSync(absPath, "utf-8");
+						const lines = rawText.split(/\r?\n/);
+						const clippedLines = lines.slice(0, 200).join("\n");
+						const clippedText = clippedLines.length > 8000 ? `${clippedLines.slice(0, 8000)}\n...(truncated)` : clippedLines;
+						const suffix = lines.length > 200 ? `\n...(auto-context truncated at 200/${lines.length} lines)` : "";
+						attachedFileSections.push(`--- [Auto-Context File: ${relLabel}] ---\n${clippedText}${suffix}`);
+						autoDiscoveredFiles++;
+					}
+				} catch {
+					// Ignore unreadable auto-discovered paths
 				}
 			}
 
@@ -1121,6 +1464,8 @@ export default function (pi: ExtensionAPI) {
 				return blocks;
 			};
 
+			const isWorkerQuotaExhausted = (reason: string): boolean =>
+				/worker local total request limit reached/i.test(reason);
 			const isRateLimit429 = (reason: string): boolean =>
 				/\b429\b|rate[_\s-]?limit|resource[_\s-]?exhausted|too many requests|quota/i.test(reason);
 			const isGone410Or404 = (reason: string): boolean =>
@@ -1128,7 +1473,7 @@ export default function (pi: ExtensionAPI) {
 			const isGatewayTimeoutOrAbort = (reason: string): boolean =>
 				/\b504\b|\b502\b|\b503\b|gateway timeout|aborted|timeout/i.test(reason);
 			const isHeavyReasoningModel = (modelId: string): boolean =>
-				/550b|deepseek-v4\.1|120b|253b/i.test(modelId);
+				/550b|120b|253b/i.test(modelId);
 			const recordCircuitBreakerFailure = (
 				candidateKey: string,
 				modelId: string,
@@ -1138,6 +1483,9 @@ export default function (pi: ExtensionAPI) {
 				if (isGone410Or404(reason)) {
 					pruneDeprecatedModelFromModelsJson(candidateKey, modelId);
 					RUNTIME_COOLDOWN_UNTIL_MS.set(candidateKey, Number.MAX_SAFE_INTEGER);
+				} else if (isWorkerQuotaExhausted(reason)) {
+					// Worker local request quota reached (e.g. 132/32): quarantine for 10m and switch immediately
+					RUNTIME_COOLDOWN_UNTIL_MS.set(candidateKey, Date.now() + 10 * 60 * 1000);
 				} else if (isGatewayTimeoutOrAbort(reason) && !hadActiveStream) {
 					// Only quarantine for 15 minutes when the server failed to respond (502/503/504 or TTFB timeout).
 					// Never quarantine a model that was actively streaming tokens normally.
@@ -1221,11 +1569,14 @@ export default function (pi: ExtensionAPI) {
 				// Acquire a Sticky Key once for the entire Multi-Turn Loop and pass it explicitly via `options.apiKey`
 				// without calling `ctx.modelRegistry.refresh()` or mutating the Main Orchestrator's default key (Killer 2 Fix).
 				const stickyKeyInfo = acquireStickyProviderKey(candidate.provider);
+				const specialistTools = buildSpecialistTools(role);
+				const MAX_SPECIALIST_TOOL_STEPS = 6;
 
 				let candidateFailed = false;
 				let finalOutputText = "";
 
 				for (let roundIdx = completedRoundIdx; roundIdx < totalRounds; roundIdx++) {
+					const roundMsgStartIdx = conversationMessages.length;
 					const roundBlocks = buildRoundUserContent(roundIdx);
 					conversationMessages.push({
 						role: "user",
@@ -1236,29 +1587,39 @@ export default function (pi: ExtensionAPI) {
 					const backoffScheduleMs = [5000, 10000];
 					let roundSucceeded = false;
 					const isIntermediateRound = totalRounds > 1 && roundIdx < totalRounds - 1;
+					const executedToolSummaries: string[] = [];
 
 					for (let attempt = 0; attempt <= backoffScheduleMs.length; attempt++) {
-						const hasHeavyPayload = attachedFileSections.length > 0 || Boolean(imageBlock);
+						// Reset any partial tool-call messages from a failed attempt within this round
+						conversationMessages.length = roundMsgStartIdx + 1;
+						executedToolSummaries.length = 0;
+
+						const hasHeavyPayload = attachedFileSections.length > 1 || Boolean(imageBlock);
 						const isHeavyModel = isHeavyReasoningModel(candidate.id);
+						const isFlashModel = /flash|lightning/i.test(candidate.id);
 						// TTFB Watchdog: fail fast if server is hung/queueing with 0 tokens emitted
-						const ttfbTimeoutMs = isHeavyModel
-							? isIntermediateRound
-								? 35000
-								: 45000
-							: isIntermediateRound || !hasHeavyPayload
-								? 24000
-								: 32000;
+						const ttfbTimeoutMs = isFlashModel
+							? hasHeavyPayload
+								? 12000
+								: 7000
+							: isHeavyModel
+								? isIntermediateRound
+									? 20000
+									: 28000
+								: isIntermediateRound || !hasHeavyPayload
+									? 12000
+									: 18000;
 						// Streaming Heartbeat Watchdog: once tokens start flowing, reset 30s idle timer on every delta
 						const idleStallTimeoutMs = 30000;
 						// Hard safety ceiling per round so an infinite token loop can never hang forever
-						const maxTotalStreamMs = isIntermediateRound ? 75000 : isHeavyModel ? 210000 : 150000;
+						const maxTotalStreamMs = isIntermediateRound ? 60000 : isHeavyModel ? 120000 : 90000;
 						const roundMaxTokens = isIntermediateRound
 							? isHeavyModel
-								? 1536
+								? 1024
 								: 768
 							: isHeavyModel
-								? 8192
-								: 4096;
+								? 2048
+								: 1536;
 
 						const watchdogController = new AbortController();
 						let watchdogAbortReason = "";
@@ -1296,97 +1657,144 @@ export default function (pi: ExtensionAPI) {
 							: watchdogController.signal;
 
 						try {
-							onUpdate?.({
-								content: [
-									{
-										type: "text",
-										text: `⏳ **[Specialist: ${role} | Model: ${candidate.provider}/${candidate.id} | Round ${roundIdx + 1}/${totalRounds}]** 等待模型首字響應中 (TTFB 偵測: ${Math.round(ttfbTimeoutMs / 1000)}s)...`,
-									},
-								],
-								details: {
-									specialist: role,
-									model: `${candidate.provider}/${candidate.id}`,
-									phase: "waiting_ttfb",
-								},
-							});
-
-							const requestContext = {
-								systemPrompt: fullSystemPrompt,
-								messages: conversationMessages,
-							};
-							const requestOptions = {
-								signal: candidateSignal,
-								...(stickyKeyInfo.key ? { apiKey: stickyKeyInfo.key } : {}),
-								maxTokens: roundMaxTokens,
-							};
-
 							let assistantMsg: any;
-							if (typeof (ctx.modelRegistry as any).stream === "function") {
-								const responseStream = (ctx.modelRegistry as any).stream(
-									candidate,
-									requestContext,
-									requestOptions,
-								);
-								let streamedThinkingChars = 0;
-								let streamedTextChars = 0;
-								let lastUiUpdateMs = Date.now();
+							let visibleText = "";
+							let thinkingText = "";
+							let outputText = "";
+							let isErr = false;
 
-								for await (const event of responseStream) {
-									if (
-										event?.type === "thinking_delta" ||
-										event?.type === "text_delta" ||
-										event?.type === "thinking_start" ||
-										event?.type === "text_start"
-									) {
-										hasReceivedFirstToken = true;
-										armIdleWatchdog(
-											idleStallTimeoutMs,
-											`Stream stalled (${Math.round(idleStallTimeoutMs / 1000)}s no token delta)`,
-										);
-										if (event.type === "thinking_delta" && typeof event.delta === "string") {
-											streamedThinkingChars += event.delta.length;
-										} else if (event.type === "text_delta" && typeof event.delta === "string") {
-											streamedTextChars += event.delta.length;
-										}
-										const nowTick = Date.now();
-										if (nowTick - lastUiUpdateMs >= 1500) {
-											lastUiUpdateMs = nowTick;
-											onUpdate?.({
-												content: [
-													{
-														type: "text",
-														text: `🟢 **[Specialist: ${role} | Model: ${candidate.provider}/${candidate.id} | Round ${roundIdx + 1}/${totalRounds}]** 連線正常，持續推理與生成中 (思考: ${streamedThinkingChars} 字 | 正文: ${streamedTextChars} 字)...`,
+							for (let toolStep = 0; toolStep <= MAX_SPECIALIST_TOOL_STEPS; toolStep++) {
+								if (toolStep > 0) {
+									armIdleWatchdog(
+										ttfbTimeoutMs,
+										`TTFB timeout on tool step ${toolStep} (${Math.round(ttfbTimeoutMs / 1000)}s)`,
+									);
+								}
+								onUpdate?.({
+									content: [
+										{
+											type: "text",
+											text: `⏳ **[Specialist: ${role} | Model: ${candidate.provider}/${candidate.id} | Round ${roundIdx + 1}/${totalRounds}${toolStep > 0 ? ` | ToolStep ${toolStep}` : ""}]** 等待模型響應中...`,
+										},
+									],
+									details: {
+										specialist: role,
+										model: `${candidate.provider}/${candidate.id}`,
+										phase: "waiting_ttfb",
+										toolStep,
+									},
+								});
+
+								const activeTools =
+									!isIntermediateRound && specialistTools.length > 0 && toolStep < MAX_SPECIALIST_TOOL_STEPS
+										? specialistTools
+										: undefined;
+								const requestContext = {
+									systemPrompt: fullSystemPrompt,
+									messages: conversationMessages,
+									...(activeTools ? { tools: activeTools } : {}),
+								};
+								const requestOptions = {
+									signal: candidateSignal,
+									...(stickyKeyInfo.key ? { apiKey: stickyKeyInfo.key } : {}),
+									maxTokens: roundMaxTokens,
+								};
+
+								if (typeof (ctx.modelRegistry as any).stream === "function") {
+									const responseStream = (ctx.modelRegistry as any).stream(
+										candidate,
+										requestContext,
+										requestOptions,
+									);
+									let streamedThinkingChars = 0;
+									let streamedTextChars = 0;
+									let lastUiUpdateMs = Date.now();
+
+									for await (const event of responseStream) {
+										if (
+											event?.type === "thinking_delta" ||
+											event?.type === "text_delta" ||
+											event?.type === "thinking_start" ||
+											event?.type === "text_start" ||
+											event?.type === "toolcall_start" ||
+											event?.type === "toolcall_delta"
+										) {
+											hasReceivedFirstToken = true;
+											armIdleWatchdog(
+												idleStallTimeoutMs,
+												`Stream stalled (${Math.round(idleStallTimeoutMs / 1000)}s no token delta)`,
+											);
+											if (event.type === "thinking_delta" && typeof event.delta === "string") {
+												streamedThinkingChars += event.delta.length;
+											} else if (event.type === "text_delta" && typeof event.delta === "string") {
+												streamedTextChars += event.delta.length;
+											}
+											const nowTick = Date.now();
+											if (nowTick - lastUiUpdateMs >= 1500) {
+												lastUiUpdateMs = nowTick;
+												onUpdate?.({
+													content: [
+														{
+															type: "text",
+															text: `🟢 **[Specialist: ${role} | Model: ${candidate.provider}/${candidate.id} | Round ${roundIdx + 1}/${totalRounds}]** 連線正常，持續推理與生成中 (思考: ${streamedThinkingChars} 字 | 正文: ${streamedTextChars} 字)...`,
+														},
+													],
+													details: {
+														specialist: role,
+														model: `${candidate.provider}/${candidate.id}`,
+														phase: "streaming",
+														thinkingChars: streamedThinkingChars,
+														textChars: streamedTextChars,
 													},
-												],
-												details: {
-													specialist: role,
-													model: `${candidate.provider}/${candidate.id}`,
-													phase: "streaming",
-													thinkingChars: streamedThinkingChars,
-													textChars: streamedTextChars,
-												},
-											});
+												});
+											}
 										}
 									}
+									assistantMsg = await responseStream.result();
+								} else {
+									assistantMsg = await ctx.modelRegistry.complete(candidate, requestContext, requestOptions);
 								}
-								assistantMsg = await responseStream.result();
-							} else {
-								assistantMsg = await ctx.modelRegistry.complete(candidate, requestContext, requestOptions);
+
+								lastAssistantMsg = assistantMsg;
+								accumulateAssistantUsage(assistantMsg?.usage);
+								const textBlocks = (assistantMsg?.content ?? [])
+									.filter((b: any): b is { type: "text"; text: string } => b?.type === "text")
+									.map((b: any) => b.text);
+								const thinkingBlocks = ((assistantMsg?.content ?? []) as any[])
+									.filter((b) => b?.type === "thinking" && typeof b.thinking === "string")
+									.map((b) => b.thinking);
+								const toolCalls = ((assistantMsg?.content ?? []) as any[]).filter(
+									(b) => b?.type === "toolCall" && typeof b.name === "string",
+								);
+								visibleText = textBlocks.join("\n").trim();
+								thinkingText = thinkingBlocks.join("\n").trim();
+								outputText = visibleText || thinkingText;
+								isErr = assistantMsg?.stopReason === "error" || Boolean(assistantMsg?.errorMessage);
+
+								if (!isErr && !isIntermediateRound && toolCalls.length > 0 && toolStep < MAX_SPECIALIST_TOOL_STEPS) {
+									conversationMessages.push(assistantMsg);
+									for (const call of toolCalls) {
+										const toolRes = executeSpecialistToolCall(
+											role,
+											call.name,
+											call.arguments ?? {},
+											rootResolved,
+										);
+										executedToolSummaries.push(`- \`${toolRes.summary}\``);
+										conversationMessages.push({
+											role: "toolResult",
+											toolCallId: call.id,
+											toolName: call.name,
+											content: [{ type: "text", text: toolRes.output }],
+											isError: toolRes.isError,
+											timestamp: Date.now(),
+										});
+									}
+									continue;
+								}
+								break;
 							}
 							clearWatchdogTimers();
-
-							lastAssistantMsg = assistantMsg;
-							accumulateAssistantUsage(assistantMsg?.usage);
-							const textBlocks = (assistantMsg?.content ?? [])
-								.filter((b: any): b is { type: "text"; text: string } => b?.type === "text")
-								.map((b: any) => b.text);
-							const thinkingBlocks = ((assistantMsg?.content ?? []) as any[])
-								.filter((b) => b?.type === "thinking" && typeof b.thinking === "string")
-								.map((b) => b.thinking);
-							const visibleText = textBlocks.join("\n").trim();
-							const thinkingText = thinkingBlocks.join("\n").trim();
-							const outputText = visibleText || thinkingText;
-							const isErr = assistantMsg?.stopReason === "error" || Boolean(assistantMsg?.errorMessage);
 
 							if (outputText.length > bestPartialAttemptText.length) {
 								bestPartialAttemptText = visibleText || outputText;
@@ -1401,12 +1809,18 @@ export default function (pi: ExtensionAPI) {
 								hasReceivedFirstToken &&
 								(isIntermediateRound ? outputText.length >= 100 : visibleText.length >= 200);
 
-							if ((!isErr && outputText) || canSalvagePartial) {
-								const effectiveText = canSalvagePartial
+							const hasCompletedToolActions = !isErr && executedToolSummaries.length > 0;
+							if ((!isErr && outputText) || canSalvagePartial || hasCompletedToolActions) {
+								const rawEffectiveText = canSalvagePartial
 									? isIntermediateRound
 										? outputText
 										: `${visibleText}\n\n---\n⚠️ *[系統註記：${candidate.provider}/${candidate.id} 於串流尾段觸發時長保護 (${watchdogAbortReason || "stream_cutoff"})，已自動保留上述完整生成內容]*`
-									: outputText;
+									: outputText || "已完成指定工具操作。";
+								const toolActionHeader =
+									executedToolSummaries.length > 0
+										? `🛠️ **[In-Process Tool Actions (${executedToolSummaries.length})]**\n${executedToolSummaries.join("\n")}\n\n`
+										: "";
+								const effectiveText = `${toolActionHeader}${rawEffectiveText}`;
 
 								// Push clean assistant text message (strip bulky internal thinking blocks across turns
 								// to keep multi-turn payload compact and compatible with all OpenAI-style NIM endpoints)
@@ -1429,7 +1843,11 @@ export default function (pi: ExtensionAPI) {
 							const errReason = watchdogAbortReason
 								? `${rawErrReason} [${watchdogAbortReason}]`
 								: rawErrReason;
-							if (isRateLimit429(errReason) && attempt < backoffScheduleMs.length) {
+							if (
+								isRateLimit429(errReason) &&
+								!isWorkerQuotaExhausted(errReason) &&
+								attempt < backoffScheduleMs.length
+							) {
 								await sleepWithSignal(backoffScheduleMs[attempt]!, signal);
 								continue;
 							}
@@ -1447,7 +1865,11 @@ export default function (pi: ExtensionAPI) {
 							clearWatchdogTimers();
 							const rawErrMsg = err?.message ?? String(err);
 							const errMsg = watchdogAbortReason ? `${rawErrMsg} [${watchdogAbortReason}]` : rawErrMsg;
-							if (isRateLimit429(errMsg) && attempt < backoffScheduleMs.length) {
+							if (
+								isRateLimit429(errMsg) &&
+								!isWorkerQuotaExhausted(errMsg) &&
+								attempt < backoffScheduleMs.length
+							) {
 								try {
 									await sleepWithSignal(backoffScheduleMs[attempt]!, signal);
 									continue;
@@ -1469,8 +1891,8 @@ export default function (pi: ExtensionAPI) {
 					}
 
 					if (!roundSucceeded) {
-						// Pop the uncompleted user prompt so the next fallback candidate resumes cleanly from completedRoundIdx
-						conversationMessages.pop();
+						// Restore conversationMessages to the exact state before this uncompleted round
+						conversationMessages.length = roundMsgStartIdx;
 						candidateFailed = true;
 						break;
 					}

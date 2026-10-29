@@ -58,6 +58,32 @@ def test_1_schema_and_context_index() -> None:
 
     context_index = json.loads((PROJECT_ROOT / "memory/index/CONTEXT_INDEX.json").read_text(encoding="utf-8"))
     assert context_index["total_nodes"] >= 4, "Expected at least 4 governed memory nodes in CONTEXT_INDEX.json"
+
+    # Verify Public / Private Index Split (D1 / Option A):
+    # 1. Public CONTEXT_INDEX.json must contain ZERO `memory/private/` entries
+    public_paths: list[str] = []
+    for section in context_index.get("domain_registry", {}).values():
+        for item in section.get("items", []):
+            public_paths.append(str(item.get("path", "")))
+    assert not any("memory/private/" in p for p in public_paths), (
+        f"Public CONTEXT_INDEX.json leaked private memory paths: {[p for p in public_paths if 'memory/private/' in p]}"
+    )
+
+    # 2. Private PRIVATE_INDEX.json must contain `memory/private/` entries when memory/private/ nodes exist
+    private_index_path = PROJECT_ROOT / "memory/index/PRIVATE_INDEX.json"
+    private_md_files = list((PROJECT_ROOT / "memory/private").rglob("*.md")) if (PROJECT_ROOT / "memory/private").exists() else []
+    if private_md_files:
+        assert private_index_path.exists(), "Expected memory/index/PRIVATE_INDEX.json to be compiled when memory/private/ has nodes"
+        private_index = json.loads(private_index_path.read_text(encoding="utf-8"))
+        private_paths: list[str] = []
+        for section in private_index.get("domain_registry", {}).values():
+            for item in section.get("items", []):
+                private_paths.append(str(item.get("path", "")))
+        assert len(private_paths) >= 1 and all("memory/private/" in p for p in private_paths), (
+            f"Expected all entries in PRIVATE_INDEX.json to be under memory/private/, got: {private_paths}"
+        )
+        print(f"  🔒 Public/Private Index Isolation Verified: {len(public_paths)} public nodes in CONTEXT_INDEX.json, {len(private_paths)} private nodes in PRIVATE_INDEX.json")
+
     print("✅ [TEST 1 PASSED]")
 
 
@@ -471,13 +497,20 @@ def test_8_router_handoff_m1_to_m7() -> None:
     assert "預設極速實作鏈" in team_md and "完整深度對抗鏈" in team_md, "M6: team.md missing dual-track chains"
     print("  ⚡ M6 子代理清理與 /team 雙軌鏈查核: 舊版殘留檔已清除，YAML 雙引號與雙軌鏈已就緒")
 
-    # 2. Live E2E test for M3 + Router v2 Multi-Turn Loop (3 files -> 2 progressive rounds), M4 (image read block), M7 (SEC-DOC-GOVERNANCE ghost .md block)
+    # 2. Live E2E test for M3 + Router v2 Multi-Turn Loop (3 files -> 2 progressive rounds), M4 (image read block), M7 & D1 (SEC-DOC-GOVERNANCE root ghost .md block vs subdirectory allow)
+    sub_md_scratch = PROJECT_ROOT / "scratch" / "draft_notes.md"
+    sub_md_staging = PROJECT_ROOT / ".staging" / "draft.md"
+    for p in (sub_md_scratch, sub_md_staging):
+        p.unlink(missing_ok=True)
+
     prompt = (
-        "You are running an automated verification of M3 (Multi-Turn filePaths loop), M4, and M7. "
-        "Invoke these 3 tool calls in parallel right now without explanation, and do not retry any blocked tool call:\n"
+        "You are running an automated verification of M3 (Multi-Turn filePaths loop), M4, and M7/D1 (SEC-DOC-GOVERNANCE). "
+        "Invoke these 5 tool calls in parallel right now without explanation, and do not retry any blocked tool call:\n"
         "1. Call `read` with `path='probe_diagram.png'`.\n"
-        "2. Call `write` with `path='GHOST_PLAN.md'` and `content='# Unmanaged Ghost Markdown'`.\n"
-        "3. Call `dispatch_specialist` with `specialist='scout'`, `filePaths=['memory/LEDGER.md', 'memory/codex/000_SOUL.md', 'memory/specs/610_ROUTER_V2_REDESIGN.md']`, "
+        "2. Call `write` with `path='GHOST_PLAN.md'` and `content='# Unmanaged Ghost Markdown in Root'`.\n"
+        "3. Call `write` with `path='scratch/draft_notes.md'` and `content='# Scratch Draft Allowed by D1'`.\n"
+        "4. Call `write` with `path='.staging/draft.md'` and `content='# Staging Draft Allowed by D1'`.\n"
+        "5. Call `dispatch_specialist` with `specialist='scout'`, `filePaths=['memory/LEDGER.md', 'memory/codex/000_SOUL.md', 'memory/specs/610_ROUTER_V2_REDESIGN.md']`, "
         "and `task='請直接列出這三個附加檔案標頭中的 node_id（MEM-2026-0008、MEM-2026-0001 與 MEM-2026-0010）。'`"
     )
     proc = subprocess.run(
@@ -527,11 +560,26 @@ def test_8_router_handoff_m1_to_m7() -> None:
         for t, _, text in tool_results
     ), "M4 Failed: Expected read('probe_diagram.png') to be blocked by Token Offload Gate in apex-commander mode!"
 
-    # M7: Unmanaged .md outside memory/ must be blocked by SEC-DOC-GOVERNANCE
-    assert any(
-        t == "write" and "SEC-DOC-GOVERNANCE" in text
-        for t, _, text in tool_results
-    ), "M7 Failed: Expected write('GHOST_PLAN.md') to be blocked by SEC-DOC-GOVERNANCE!"
+    # M7 & D1: Unmanaged .md directly in project root (`GHOST_PLAN.md`) must be blocked by SEC-DOC-GOVERNANCE,
+    # whereas subdirectory .md (`scratch/draft_notes.md` and `.staging/draft.md`) must be ALLOWED!
+    try:
+        assert any(
+            t == "write" and "SEC-DOC-GOVERNANCE" in text
+            for t, _, text in tool_results
+        ), "M7 Failed: Expected root-level write('GHOST_PLAN.md') to be blocked by SEC-DOC-GOVERNANCE!"
+        assert not (PROJECT_ROOT / "GHOST_PLAN.md").exists(), "GHOST_PLAN.md should not exist in project root!"
+        assert sub_md_scratch.exists() and "Scratch Draft Allowed" in sub_md_scratch.read_text(encoding="utf-8"), (
+            "D1 Failed: Expected write('scratch/draft_notes.md') to be ALLOWED by SEC-DOC-GOVERNANCE!"
+        )
+        assert sub_md_staging.exists() and "Staging Draft Allowed" in sub_md_staging.read_text(encoding="utf-8"), (
+            "D1 Failed: Expected write('.staging/draft.md') to be ALLOWED by SEC-DOC-GOVERNANCE!"
+        )
+        print("  ⚡ D1 SEC-DOC-GOVERNANCE 驗證通過：根目錄 `GHOST_PLAN.md` 攔截成功，子目錄 `scratch/draft_notes.md` 與 `.staging/draft.md` 正常放行！")
+    finally:
+        sub_md_scratch.unlink(missing_ok=True)
+        sub_md_staging.unlink(missing_ok=True)
+        if sub_md_staging.parent.exists() and not any(sub_md_staging.parent.iterdir()):
+            sub_md_staging.parent.rmdir()
 
     # M3 + Router v2.3: dispatch_specialist with 3 small filePaths must execute directly and succeed
     assert any(
@@ -617,8 +665,28 @@ topology:
         )
         assert res_prose.returncode != 0, "Stage 4 Trap Failed: Prose budget overflow (>50 lines for rule) was not caught!"
         assert "[ProseBudget]" in res_prose.stdout, f"Missing [ProseBudget] in output: {res_prose.stdout}"
-        assert "Prescription Skeleton" in res_prose.stdout, "Missing Prescription Skeleton in validator failure output!"
-        print("  ⚡ Stage 4 純散文預算 (ProseBudget <= 50) 與 YAML 處方籤骨架輸出攔截成功")
+        assert "Prescription Skeleton" in res_prose.stdout and "Targeted Fix Hint" in res_prose.stdout, (
+            "Missing Targeted Fix Hint Prescription Skeleton in validator failure output when YAML header already exists!"
+        )
+        assert "```markdown" not in res_prose.stdout, (
+            "D5 Regression: Validator should NOT dump 60-line markdown skeleton when YAML frontmatter already exists!"
+        )
+
+        # 1b. Test D5 Full 60-line Prescription Skeleton when YAML frontmatter is missing
+        no_yaml_md = tmp_path / "MEM-9990_NO_YAML.md"
+        no_yaml_md.write_text("# Missing Frontmatter Document\n\n- [FACT] Just a raw markdown file.\n", encoding="utf-8")
+        res_no_yaml = subprocess.run(
+            [sys.executable, "schemas/schema_validator.py", "--file", str(no_yaml_md)],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert res_no_yaml.returncode != 0, "Expected missing YAML frontmatter to fail validation!"
+        assert "Prescription Skeleton" in res_no_yaml.stdout and "```markdown" in res_no_yaml.stdout, (
+            "D5 Failed: Expected full YAML Prescription Skeleton when YAML frontmatter is missing!"
+        )
+        print("  ⚡ Stage 4 & D5 純散文預算 (ProseBudget <= 50) 與按需處方籤 (Targeted Fix Hint vs Full Skeleton) 攔截成功")
 
         # 2. Test AS-05 Path Portability & Privacy Check + AS-06 Supersedes/Conflicts Exclusivity Check
         bad_as05_as06_md = tmp_path / "MEM-9992_AS05_AS06_TRAP.md"
@@ -853,12 +921,12 @@ def test_12_kv_cache_guard_usage_and_context_dashboard() -> None:
     subagent_src = (FRIDAY_BRAIN / "extensions" / "subagent" / "index.ts").read_text(encoding="utf-8")
     spec_610_src = (PROJECT_ROOT / "memory" / "specs" / "610_ROUTER_V2_REDESIGN.md").read_text(encoding="utf-8")
 
-    # 1. Verify Killer 1 Fix: Tail-injected custom message for mandates (never mutates event.systemPrompt)
-    assert 'customType: "friday-mandate"' in router_src, "Killer 1 Fix missing: before_agent_start must use customType: 'friday-mandate'"
-    assert "systemPrompt: `${event.systemPrompt}\\n\\n${mandates.join" not in router_src, (
+    # 1. Verify Killer 1 Fix & D3 Silent Guardrails: Never mutates event.systemPrompt at Token 0, and any mandate uses customType: 'friday-mandate'
+    assert "systemPrompt: `${event.systemPrompt}" not in router_src, (
         "Killer 1 Regression: model-router.ts must NOT append mandates to event.systemPrompt at Token 0!"
     )
-    print("  ⚡ [Killer 1 Fix] `before_agent_start` 尾端隱形訊息 (`friday-mandate`) 注入、保護 Token 0 不變性驗證通過")
+    assert 'customType: "friday-mandate"' in router_src, "Killer 1 Fix: customType 'friday-mandate' support must remain in model-router.ts"
+    print("  ⚡ [Killer 1 Fix & D3] 保護 Token 0 `systemPrompt` 不變性與 `friday-mandate` 結構驗證通過")
 
     # 2. Verify Killer 2 Fix: Non-disruptive Sticky Key (`entry.key = pool[0]!` + explicit `apiKey: stickyKeyInfo.key`)
     assert "entry.key = pool[0]!;" in router_src, "Killer 2 Fix missing: acquireStickyProviderKey must keep entry.key pinned to pool[0]"
