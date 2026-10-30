@@ -602,9 +602,9 @@ export default function (pi: ExtensionAPI) {
 				const target = resolveRealTarget(rawPath, ctx.cwd);
 				const relToCwd = path.relative(ctx.cwd, target).replace(/\\/g, "/");
 
-				// M7 & D1: SEC-DOC-GOVERNANCE — Only block unmanaged .md files created directly in the project root directory
-				// (outside memory/ and .Friday/, subdirectories like scratch/, .staging/, src/, tests/, docs/ are freely allowed).
-				if (target.toLowerCase().endsWith(".md") && !relToCwd.startsWith("..")) {
+				// M7 & D1: SEC-DOC-GOVERNANCE — Only active when memory/codex exists
+				const hasCodex = fs.existsSync(path.join(ctx.cwd, "memory", "codex"));
+				if (hasCodex && target.toLowerCase().endsWith(".md") && !relToCwd.startsWith("..")) {
 					const isUnmanagedRootMarkdown =
 						!relToCwd.includes("/") && relToCwd !== "README.md" && relToCwd !== "AGENTS.md";
 					if (isUnmanagedRootMarkdown) {
@@ -613,17 +613,27 @@ export default function (pi: ExtensionAPI) {
 							reason: formatRemediation(
 								"SEC-DOC-GOVERNANCE",
 								`🛡️ [SEC-DOC-GOVERNANCE] 禁止在專案根目錄直接建立未納管的幽靈 Markdown 文件 (${rawPath}，根目錄僅允許 README.md 與 AGENTS.md)！`,
-								"受治理架構規格請寫入 memory/specs/ 或 memory/private/specs/（決策寫入 memory/decisions/、驗收寫入 memory/audits/、進度寫入 memory/LEDGER.md）並附上合規 YAML 標頭；臨時草稿或測試筆記請寫入 scratch/ 等子目錄。",
+								"受治理架構規格請寫入 memory/specs/ 或 memory/private/specs/；臨時草稿請寫入 scratch/；Wiki 條目請寫入 memory/wiki/。",
 							),
 						};
 					}
 				}
 
+				// Allow single agent direct writes/updates to memory/wiki/
+				const isWiki = relToCwd.startsWith("memory/wiki/");
 				const isGovernedDocOrConfig =
+					!isWiki &&
+					(relToCwd.startsWith("memory/codex/") ||
+					relToCwd.startsWith("memory/adr/") ||
+					relToCwd.startsWith("memory/specs/") ||
+					relToCwd.startsWith("memory/audit/") ||
+					relToCwd.startsWith("memory/audits/") ||
+					relToCwd.startsWith("memory/private/") ||
+					relToCwd === "memory/LEDGER.md" ||
 					relToCwd.startsWith("memory/") ||
 					relToCwd === "README.md" ||
 					relToCwd === "AGENTS.md" ||
-					relToCwd.startsWith(".Friday/");
+					relToCwd.startsWith(".Friday/"));
 
 				if (isGovernedDocOrConfig) {
 					const writtenText = [

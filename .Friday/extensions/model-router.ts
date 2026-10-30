@@ -29,7 +29,42 @@ import {
 	resizeImage,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { clearSessionPinnedContextSummaries, getSessionPinnedContextSummary } from "./epistemic-gate.js";
+
+export interface FridayEpistemicBridge {
+	getVerifiedIndexSnapshot?: (cwd: string) => any;
+	getCatalogSummary?: (cwd: string) => string;
+	queryLibrary?: (params: Record<string, unknown>, cwd: string) => string;
+	getSessionPinnedContextSummary?: (sessionKey: string, cwd: string, forceRefresh?: boolean) => string | null;
+	clearSessionPinnedContextSummaries?: () => void;
+}
+
+declare global {
+	// eslint-disable-next-line no-var
+	var __fridayEpistemicBridge: FridayEpistemicBridge | undefined;
+}
+
+function getEpistemicBridge(): FridayEpistemicBridge | undefined {
+	return (globalThis as any).__fridayEpistemicBridge ?? globalThis.__fridayEpistemicBridge;
+}
+
+function getSessionPinnedContextSummary(sessionKey: string, cwd: string, forceRefresh = false): string | null {
+	if (!fs.existsSync(path.join(cwd, "memory"))) return null;
+	const bridge = getEpistemicBridge();
+	if (bridge && typeof bridge.getSessionPinnedContextSummary === "function") {
+		return bridge.getSessionPinnedContextSummary(sessionKey, cwd, forceRefresh);
+	}
+	if (bridge && typeof bridge.getCatalogSummary === "function") {
+		return bridge.getCatalogSummary(cwd);
+	}
+	return null;
+}
+
+function clearSessionPinnedContextSummaries(): void {
+	const bridge = getEpistemicBridge();
+	if (bridge && typeof bridge.clearSessionPinnedContextSummaries === "function") {
+		bridge.clearSessionPinnedContextSummaries();
+	}
+}
 
 const DEFAULT_PROVIDER = "nvidia";
 const DEPRECATED_404_MODELS = new Set([
@@ -202,17 +237,47 @@ export function syncNvidiaModelsFromStore(): { updated: boolean; count: number }
 			"NVCF-POLL-SECONDS": "30",
 		};
 
-		let sourceModels: any[] = Array.isArray(nvidiaProvider.models) ? nvidiaProvider.models : [];
+		const existingModels: any[] = Array.isArray(nvidiaProvider.models) ? nvidiaProvider.models : [];
+		let sourceModels: any[] = existingModels;
 		if (fs.existsSync(modelsStorePath)) {
 			try {
 				const storeData = JSON.parse(fs.readFileSync(modelsStorePath, "utf-8"));
 				const storeNvidiaModels = storeData?.nvidia?.models;
 				if (Array.isArray(storeNvidiaModels) && storeNvidiaModels.length > 0) {
-					sourceModels = storeNvidiaModels;
+					sourceModels = [...storeNvidiaModels];
 				}
 			} catch {
 				// Keep existing sourceModels if models-store.json is mid-write or malformed
 			}
+		}
+
+		// Merge persistent user-defined models from .Friday/custom-models.json and any pinned: true entries in models.json
+		const customModelsPath = path.join(fridayDir, "custom-models.json");
+		const customEntries: any[] = [];
+		if (fs.existsSync(customModelsPath)) {
+			try {
+				const customData = JSON.parse(fs.readFileSync(customModelsPath, "utf-8"));
+				const list = Array.isArray(customData)
+					? customData
+					: Array.isArray(customData?.models)
+						? customData.models
+						: [];
+				for (const item of list) {
+					if (item && typeof item === "object" && typeof item.id === "string") {
+						customEntries.push({ ...item, pinned: true });
+					}
+				}
+			} catch {
+				// Ignore malformed custom-models.json
+			}
+		}
+		for (const item of existingModels) {
+			if (item && typeof item === "object" && (item.pinned === true || item.custom === true)) {
+				customEntries.push(item);
+			}
+		}
+		if (customEntries.length > 0) {
+			sourceModels = [...sourceModels, ...customEntries];
 		}
 
 		const normalizedModels: any[] = [];
@@ -221,13 +286,16 @@ export function syncNvidiaModelsFromStore(): { updated: boolean; count: number }
 			if (!m || typeof m !== "object" || typeof m.id !== "string") continue;
 			const id = m.id.trim();
 			if (!id || seenIds.has(id)) continue;
-			if (DEPRECATED_404_MODELS.has(id) || DEPRECATED_404_MODELS.has(`nvidia/${id}`)) {
+			if (!m.pinned && !m.custom && (DEPRECATED_404_MODELS.has(id) || DEPRECATED_404_MODELS.has(`nvidia/${id}`))) {
 				continue;
 			}
 			seenIds.add(id);
 			normalizedModels.push({
 				...m,
 				id,
+				api: m.api ?? "openai-completions",
+				provider: m.provider ?? "nvidia",
+				baseUrl: m.baseUrl ?? "https://integrate.api.nvidia.com/v1",
 				headers: {
 					...(m.headers ?? {}),
 					"NVCF-POLL-SECONDS": "30",
@@ -237,6 +305,14 @@ export function syncNvidiaModelsFromStore(): { updated: boolean; count: number }
 					output: 0,
 					cacheRead: 0,
 					cacheWrite: 0,
+				},
+				compat: m.compat ?? {
+					supportsStore: false,
+					supportsDeveloperRole: false,
+					supportsReasoningEffort: false,
+					maxTokensField: "max_tokens",
+					supportsLongCacheRetention: false,
+					supportsStrictMode: false,
 				},
 			});
 		}
@@ -1112,6 +1188,81 @@ export default function (pi: ExtensionAPI) {
 		return undefined;
 	});
 
+	function buildSeamlessReadOffloadDigest(
+		absPath: string,
+		rawContent: string,
+		totalLinesArg?: number,
+		relPath?: string,
+	): string {
+		const MAX_SCAN_BYTES = 500 * 1024;
+		const MAX_SCAN_LINES = 5000;
+		const boundedContent = rawContent.length > MAX_SCAN_BYTES ? rawContent.slice(0, MAX_SCAN_BYTES) : rawContent;
+		const lines = boundedContent.split("\n");
+		const totalLines = totalLinesArg && totalLinesArg >= lines.length ? totalLinesArg : lines.length;
+		const previewEnd = Math.min(60, lines.length);
+		const headPreview = lines
+			.slice(0, previewEnd)
+			.map((line, idx) => `${idx + 1}: ${line}`)
+			.join("\n");
+
+		// In-Process AST / Structural Symbol Outline (bounded to 5,000 lines or 500KB)
+		const rawSymbols: { lineNum: number; label: string }[] = [];
+		const scanLimit = Math.min(lines.length, MAX_SCAN_LINES);
+		const tsSymbolRegex =
+			/^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|interface|type|const|let|var|enum)\s+([A-Za-z0-9_$]+)/;
+		const pySymbolRegex = /^\s*(?:async\s+)?(?:def|class)\s+([A-Za-z0-9_]+)/;
+		const mdHeadingRegex = /^(#{1,6})\s+(.+)/;
+
+		for (let i = 0; i < scanLimit; i++) {
+			const line = lines[i] ?? "";
+			const lineNum = i + 1;
+			let match: RegExpMatchArray | null = null;
+			if ((match = line.match(tsSymbolRegex)) && !/^\s*type\s+[A-Za-z0-9_$]+\s*,?\s*$/.test(line)) {
+				rawSymbols.push({ lineNum, label: match[0].trim() });
+			} else if ((match = line.match(pySymbolRegex))) {
+				rawSymbols.push({ lineNum, label: match[0].trim() });
+			} else if ((match = line.match(mdHeadingRegex))) {
+				rawSymbols.push({ lineNum, label: `${match[1]} ${match[2]!.trim()}` });
+			}
+		}
+
+		const symbolEntries = rawSymbols.map((sym, idx) => {
+			const startLine = sym.lineNum;
+			const nextSymbol = rawSymbols[idx + 1];
+			const endLine = nextSymbol ? Math.max(startLine, nextSymbol.lineNum - 1) : totalLines;
+			return `  - L${startLine}-L${endLine}: ${sym.label}`;
+		});
+
+		const symbolListStr =
+			symbolEntries.length > 0
+				? symbolEntries.slice(0, 60).join("\n") +
+					(symbolEntries.length > 60 ? `\n  ... (+${symbolEntries.length - 60} more symbols)` : "")
+				: "  (No top-level class/function/heading symbols detected)";
+
+		const displayPath = relPath && !relPath.startsWith("..") ? relPath : absPath;
+		const modeHeader =
+			STRATEGY_MODE === "hybrid-synergy"
+				? '🛡️ [Token Offload Gate | Hybrid-Synergy 防塞爆閥] [Seamless Read Auto-Offload] 雙腦協同模式下，雖允許讀圖與一般檔案，但禁止單回合連續 read 超過 4 個檔案或未設 limit 直接生吞 >350 行巨型檔案（防主腦 Context 暴增）！已於同 Turn 自動提取結構大綱與前段預覽；請依下方座標在 read 指定 offset/limit (limit <= 350) 分段讀取，或改用 dispatch_specialist(specialist="scout"|"challenger", filePaths=[...], task="...")、read_outline、read_symbol。'
+				: '🛡️ [Token Offload Gate] [Seamless Read Auto-Offload] 旗艦省流模式下，單回合禁止直接連續 read 超過 3 個檔案或讀取 >350 行巨型檔案！已於同 Turn 自動提取結構大綱與前段預覽；請依下方座標在 read 指定 offset/limit (limit <= 350) 分段讀取，或改用 dispatch_specialist(specialist="scout"|"challenger", filePaths=[...], task="...")、subagent(agent="scout"|"worker", task="...")、read_outline、read_symbol。';
+
+		return [
+			modeHeader,
+			`File: ${absPath} (Total: ${totalLines} lines)`,
+			``,
+			`--- 📑 [Seamless Read Auto-Offload | Structural Outline] Structural Outline & Symbol Index ---`,
+			symbolListStr,
+			``,
+			`--- 📄 [Preview L1-L${previewEnd}] Head Preview (L1-L${previewEnd}) ---`,
+			headPreview,
+			``,
+			`💡 Recommended Slice Commands (limit <= 350 passes through with 0 penalty):`,
+			`  read(path="${displayPath}", offset=1, limit=300)`,
+			`  read(path="${displayPath}", offset=301, limit=300)`,
+			...(displayPath !== absPath ? [`  read(path="${absPath}", offset=1, limit=300)`] : []),
+			`Tip: Bounded reads with 0 < limit <= 350 pass through automatically. Alternative tools: read_outline, read_symbol, dispatch_specialist.`,
+		].join("\n");
+	}
+
 	pi.on("tool_call", async (event, ctx) => {
 		loadPersistedRoleModels();
 		if (forcedMode !== "auto") return undefined;
@@ -1141,9 +1292,22 @@ export default function (pi: ExtensionAPI) {
 			return undefined;
 		}
 
-		// Rule 2: Multi-file / Large-file Read Quota & Anti-Bloat Safety Valve
-		// - apex-commander: max 3 files per turn, and block >350 lines without limit outside memory/
-		// - hybrid-synergy: max 4 files per turn, and block >350 lines without limit outside memory/ (prevents giant JSON/log files from bloating Main Brain Context)
+		// Rule 2: Seamless Read Auto-Offload (R1) & Multi-file / Large-file Anti-Bloat Safety Valve
+		// - Case A (Bounded Slice Pass-Through): explicit limit with 0 < Number(limit) <= 350 (with or without offset) -> return undefined (0 violation penalty)
+		// - Case B (In-Flight Auto-Offload): missing limit or limit > 350 on file with > 350 lines (or turnReadCount > maxReadsPerTurn) -> return synchronous Structural Outline + L1-L60 Preview + Slice Coordinates
+		const MAX_DIRECT_READ_LINES = 350;
+		const rawLimit = (event.input as any)?.limit;
+		const reqLimit = rawLimit !== undefined && rawLimit !== null && rawLimit !== "" ? Number(rawLimit) : undefined;
+		const reqOffset =
+			(event.input as any)?.offset !== undefined && (event.input as any)?.offset !== null
+				? Number((event.input as any)?.offset)
+				: undefined;
+		void reqOffset;
+
+		if (reqLimit !== undefined && Number.isFinite(reqLimit) && reqLimit > 0 && reqLimit <= MAX_DIRECT_READ_LINES) {
+			return undefined;
+		}
+
 		turnReadCount += 1;
 		const maxReadsPerTurn = STRATEGY_MODE === "apex-commander" ? 3 : 4;
 		const resolvedPath = path.isAbsolute(rawPath) ? rawPath : path.resolve(ctx.cwd, rawPath);
@@ -1151,12 +1315,31 @@ export default function (pi: ExtensionAPI) {
 		const isGovernedMemoryFile = relToCwd === "memory" || relToCwd.startsWith("memory/");
 
 		let exceedsLineLimit = false;
-		if (!isGovernedMemoryFile && !(event.input as any)?.limit && fs.existsSync(resolvedPath)) {
+		let cachedFileContent = "";
+		let cachedLineCount = 0;
+		if (
+			!isGovernedMemoryFile &&
+			(reqLimit === undefined || !Number.isFinite(reqLimit) || reqLimit <= 0 || reqLimit > MAX_DIRECT_READ_LINES) &&
+			fs.existsSync(resolvedPath)
+		) {
 			try {
 				const stat = fs.statSync(resolvedPath);
-				if (stat.isFile() && stat.size > 4096) {
-					const lineCount = fs.readFileSync(resolvedPath, "utf-8").split("\n").length;
-					if (lineCount > 350) {
+				if (stat.isFile()) {
+					const maxBytes = 500 * 1024;
+					if (stat.size > maxBytes) {
+						const fd = fs.openSync(resolvedPath, "r");
+						try {
+							const buf = Buffer.alloc(maxBytes);
+							const bytesRead = fs.readSync(fd, buf, 0, maxBytes, 0);
+							cachedFileContent = buf.subarray(0, bytesRead).toString("utf-8");
+						} finally {
+							fs.closeSync(fd);
+						}
+					} else {
+						cachedFileContent = fs.readFileSync(resolvedPath, "utf-8");
+					}
+					cachedLineCount = cachedFileContent.split("\n").length;
+					if (cachedLineCount > MAX_DIRECT_READ_LINES || stat.size > maxBytes) {
 						exceedsLineLimit = true;
 					}
 				}
@@ -1166,17 +1349,38 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		if (turnReadCount > maxReadsPerTurn || exceedsLineLimit) {
-			if (STRATEGY_MODE === "hybrid-synergy") {
-				return {
-					block: true,
-					reason:
-						'🛡️ [Token Offload Gate | Hybrid-Synergy 防塞爆閥] 雙腦協同模式下，雖允許讀圖與一般檔案，但禁止單回合連續 read 超過 4 個檔案或未設 limit 直接生吞 >350 行巨型檔案（防主腦 Context 暴增）！請改用 dispatch_specialist(specialist="scout"|"challenger", filePaths=[...], task="...") 代讀摘要，或在 read 指定 offset/limit 分段讀取。',
-				};
+			if (!cachedFileContent && fs.existsSync(resolvedPath)) {
+				try {
+					const stat = fs.statSync(resolvedPath);
+					if (stat.isFile()) {
+						const maxBytes = 500 * 1024;
+						if (stat.size > maxBytes) {
+							const fd = fs.openSync(resolvedPath, "r");
+							try {
+								const buf = Buffer.alloc(maxBytes);
+								const bytesRead = fs.readSync(fd, buf, 0, maxBytes, 0);
+								cachedFileContent = buf.subarray(0, bytesRead).toString("utf-8");
+							} finally {
+								fs.closeSync(fd);
+							}
+						} else {
+							cachedFileContent = fs.readFileSync(resolvedPath, "utf-8");
+						}
+						cachedLineCount = cachedFileContent.split("\n").length;
+					}
+				} catch {
+					// Ignore read errors
+				}
 			}
+			const offloadDigest = buildSeamlessReadOffloadDigest(
+				resolvedPath,
+				cachedFileContent,
+				cachedLineCount,
+				relToCwd,
+			);
 			return {
 				block: true,
-				reason:
-					'🛡️ [Token Offload Gate] 旗艦省流模式下，單回合禁止直接連續 read 超過 3 個檔案或讀取 >350 行巨型檔案！請改用 dispatch_specialist(specialist="scout"|"challenger", filePaths=[...], task="...") 或 subagent(agent="scout"|"worker", task="...") 由免費專家代讀分析。',
+				reason: offloadDigest,
 			};
 		}
 
@@ -1248,9 +1452,14 @@ export default function (pi: ExtensionAPI) {
 			const attachedFileSections: string[] = [];
 			const seenAbsPaths = new Set<string>();
 
-			// D2(d): Always include a 1-line workspace snapshot showing CONTEXT_INDEX.json, PRIVATE_INDEX.json, and scratch/ contents
-			const ctxIdxExists = fs.existsSync(path.join(rootResolved, "memory", "index", "CONTEXT_INDEX.json"));
-			const privIdxExists = fs.existsSync(path.join(rootResolved, "memory", "index", "PRIVATE_INDEX.json"));
+			// D2(d): Include a 1-line workspace snapshot; degrade gracefully via FridayEpistemicBridge when memory/ does not exist
+			const hasMemoryDir = fs.existsSync(path.join(rootResolved, "memory"));
+			const bridgeSnapshot = hasMemoryDir ? getEpistemicBridge()?.getVerifiedIndexSnapshot?.(rootResolved) : null;
+			const ctxIdxExists =
+				Boolean(bridgeSnapshot) ||
+				(hasMemoryDir && fs.existsSync(path.join(rootResolved, "memory", "index", "CONTEXT_INDEX.json")));
+			const privIdxExists =
+				hasMemoryDir && fs.existsSync(path.join(rootResolved, "memory", "index", "PRIVATE_INDEX.json"));
 			const scratchDir = path.join(rootResolved, "scratch");
 			let scratchSnapshot = "missing";
 			if (fs.existsSync(scratchDir) && fs.statSync(scratchDir).isDirectory()) {
@@ -1261,7 +1470,9 @@ export default function (pi: ExtensionAPI) {
 					scratchSnapshot = "exists";
 				}
 			}
-			const workspaceSnapshotLine = `[Workspace Snapshot]: memory/index/CONTEXT_INDEX.json=${ctxIdxExists ? "exists" : "missing"} | memory/index/PRIVATE_INDEX.json=${privIdxExists ? "exists" : "missing"} | scratch/=${scratchSnapshot}`;
+			const workspaceSnapshotLine = hasMemoryDir
+				? `[Workspace Snapshot]: memory/index/CONTEXT_INDEX.json=${ctxIdxExists ? "exists" : "unindexed"} | memory/index/PRIVATE_INDEX.json=${privIdxExists ? "exists" : "none"} | scratch/=${scratchSnapshot}`
+				: `[Workspace Snapshot]: scratch/=${scratchSnapshot}`;
 			attachedFileSections.push(workspaceSnapshotLine);
 
 			const formatDirectoryListing = (dirAbsPath: string, relLabel: string): string => {

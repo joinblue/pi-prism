@@ -528,6 +528,38 @@
           "type": "chat"
         },
         {
+          "id": "nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
+          "name": "Llama 3.1 Nemotron Safety Guard 8B v3",
+          "api": "openai-completions",
+          "provider": "nvidia",
+          "baseUrl": "https://integrate.api.nvidia.com/v1",
+          "reasoning": false,
+          "input": [
+            "text"
+          ],
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          },
+          "contextWindow": 128000,
+          "maxTokens": 4096,
+          "headers": {
+            "NVCF-POLL-SECONDS": "30"
+          },
+          "compat": {
+            "supportsStore": false,
+            "supportsDeveloperRole": false,
+            "supportsReasoningEffort": false,
+            "maxTokensField": "max_tokens",
+            "supportsLongCacheRetention": false,
+            "supportsStrictMode": false
+          },
+          "type": "chat",
+          "pinned": true
+        },
+        {
           "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
           "name": "Nemotron 3 Nano Omni",
           "api": "openai-completions",

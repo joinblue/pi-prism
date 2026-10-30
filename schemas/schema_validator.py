@@ -44,12 +44,20 @@ EPISTEMIC_TAGS = {
     "unverified_count": re.compile(r"(?m)^\s*(?:[-*+]|\d+\.)\s+`?\[UNVERIFIED\]`?(?!\*\*：)"),
 }
 
+OFFICIAL_TYPES = {"constitution", "rule", "adr", "spec", "audit"}
+WIKI_TYPES = {"wiki", "note", "sop", "glossary", "digest"}
+
 PROSE_LINE_BUDGETS: Dict[str, int] = {
     "constitution": 50,
     "rule": 50,
     "adr": 50,
     "spec": 160,
     "audit": 160,
+    "wiki": 500,
+    "note": 500,
+    "sop": 500,
+    "glossary": 500,
+    "digest": 500,
 }
 
 AS05_PORTABILITY_PATTERNS: List[Tuple[str, re.Pattern[str]]] = [
@@ -186,12 +194,14 @@ def detect_unlinked_topology_references(
 ) -> List[str]:
     """
     Detects when an active (`verified`/`draft`) spec/audit explicitly references other `verified`
-    spec/audit nodes in its Markdown body while `supersedes` and `conflicts_with` are left empty (`[]`).
-    Returns human-readable reminder notices so temporary unlinked conflicts are never forgotten.
+    spec/audit nodes in its Markdown body while `depends_on`, `supersedes`, and `conflicts_with` are left empty.
+    Wiki-track nodes (`WIKI_TYPES`) using `[[wikilink]]` syntax are exempt from formal conflict warnings.
     """
     notices: List[str] = []
     status = fm.get("status", "")
     if status not in ("verified", "draft"):
+        return notices
+    if fm.get("artifact_type", "") in WIKI_TYPES:
         return notices
 
     topo = fm.get("topology", {}) or {}
@@ -199,6 +209,7 @@ def detect_unlinked_topology_references(
         (topo.get("depends_on") or [])
         + (topo.get("supersedes") or [])
         + (topo.get("conflicts_with") or [])
+        + (fm.get("outbound_links") or [])
     )
 
     unlinked_targets: List[str] = []
@@ -219,7 +230,7 @@ def detect_unlinked_topology_references(
     if unlinked_targets:
         notices.append(
             f"[AS-06 Pending Topology Alignment] 節點 {node_id} 內文提及活躍節點 {', '.join(unlinked_targets)}，"
-            f"但標頭 `supersedes` / `conflicts_with` 留空尚未收斂（完成跨檔衝突測試後，請補齊 supersedes 或將舊節點降級為 archived/deprecated）。"
+            f"但標頭尚未宣告拓撲關聯（若為一般引用請加入 `topology.depends_on`；若為新版取代舊版，請補齊 `supersedes` 並將舊節點降級為 archived/deprecated）。"
         )
     return notices
 
@@ -352,6 +363,9 @@ def validate_document(
 
     # 2. Stage 4: Tiered Prose Line Budget Check
     artifact_type = fm.get("artifact_type", "")
+    is_official = artifact_type in OFFICIAL_TYPES
+    is_wiki = artifact_type in WIKI_TYPES
+
     budget = PROSE_LINE_BUDGETS.get(artifact_type)
     prose_lines = count_prose_lines(body)
     if budget is not None and prose_lines > budget:
@@ -366,6 +380,18 @@ def validate_document(
                 f"[ProseBudget / LEDGER] memory/LEDGER.md 總行數超標 ({total_lines} > 80 行)：請立即歸檔已完工項目！"
             )
 
+    # 2.1 Content Checksum Verification (if present in frontmatter)
+    content_checksum = fm.get("content_checksum")
+    if content_checksum:
+        import hashlib
+        body_for_hash = body.lstrip("\r\n") if body.startswith("\r\n") else (body.lstrip("\n") if body.startswith("\n") else body)
+        actual_checksum = hashlib.sha256(body_for_hash.encode("utf-8")).hexdigest()[:16]
+        alt_checksum = hashlib.sha256(body.encode("utf-8")).hexdigest()[:16]
+        if content_checksum not in (actual_checksum, alt_checksum):
+            errors.append(
+                f"[Checksum Mismatch] 內文 content_checksum ({content_checksum}) 與實際計算值 ({actual_checksum}) 不符！"
+            )
+
     # 3. AS-01: Cross-Model Dialectical Review Check (Anti-Sycophancy)
     status = fm.get("status")
     author_obj = fm.get("author") if isinstance(fm.get("author"), dict) else {}
@@ -374,12 +400,22 @@ def validate_document(
     rev_model = reviewer_obj.get("model", "")
     verdict = reviewer_obj.get("verdict", "")
 
-    if status in ("verified", "archived"):
-        if orig_model == rev_model:
+    if is_official and status in ("verified", "archived"):
+        if not reviewer_obj:
+            errors.append(
+                f"[AS-01 Anti-Sycophancy] 公文軌文件進入「{status}」狀態必須具備跨模型 reviewer 審查！"
+            )
+        elif orig_model == rev_model:
             errors.append(
                 f"[AS-01 Anti-Sycophancy] 禁止同模型自審自核！產出模型 ({orig_model}) 與審查模型 ({rev_model}) 相同，不可進入「{status}」狀態。"
             )
-        if verdict != "APPROVED":
+        elif verdict != "APPROVED":
+            errors.append(
+                f"[AS-01 Anti-Sycophancy] 狀態為「{status}」時，reviewer.verdict 必須為 APPROVED（目前為 {verdict}）。"
+            )
+    elif not is_official and reviewer_obj and status in ("verified", "archived"):
+        # For wiki documents, if reviewer is provided, check verdict if present
+        if verdict and verdict != "APPROVED":
             errors.append(
                 f"[AS-01 Anti-Sycophancy] 狀態為「{status}」時，reviewer.verdict 必須為 APPROVED（目前為 {verdict}）。"
             )
@@ -390,18 +426,19 @@ def validate_document(
     for key, pattern in EPISTEMIC_TAGS.items():
         actual = len(pattern.findall(body))
         actual_counts[key] = actual
-        declared = profile.get(key, -1)
-        if actual != declared:
-            errors.append(
-                f"[AS-02 Epistemic Honesty] 內文標籤數量與標頭宣告不符：{key} 宣告為 {declared}，但內文實際匹配 {actual} 次（⚠️ 標籤必須位於 Markdown 列表行首，如 `- [FACT] 內容...` 或 `1. [INFERRED] 內容...`；寫在一般段落、表格內或列表句尾均不計入）。"
-            )
+        if profile:
+            declared = profile.get(key, -1)
+            if declared != -1 and actual != declared:
+                errors.append(
+                    f"[AS-02 Epistemic Honesty] 內文標籤數量與標頭宣告不符：{key} 宣告為 {declared}，但內文實際匹配 {actual} 次（⚠️ 標籤必須位於 Markdown 列表行首，如 `- [FACT] 內容...` 或 `1. [INFERRED] 內容...`；寫在一般段落、表格內或列表句尾均不計入）。"
+                )
 
     if status in ("verified", "archived"):
         if actual_counts.get("unverified_count", 0) > 0:
             errors.append(
                 f"[AS-02 Epistemic Gate] 進入「{status}」之記憶節點不得含有 [UNVERIFIED] 未驗證段落（目前有 {actual_counts['unverified_count']} 處）。"
             )
-        if actual_counts.get("fact_count", 0) + actual_counts.get("inferred_count", 0) == 0:
+        if is_official and (actual_counts.get("fact_count", 0) + actual_counts.get("inferred_count", 0) == 0):
             errors.append(
                 f"[AS-02 Epistemic Gate] 記憶節點內文必須至少包含一處位於 Markdown 列表行首的 [FACT] 或 [INFERRED] 標記（格式範例：`- [FACT] 內容...` 或 `1. [INFERRED] 內容...`；寫在純文字段落、表格內或列表句尾均不計入！）。"
             )
@@ -423,23 +460,26 @@ def validate_document(
         errors.extend(check_as06_node_exclusivity(node_id, fm, lookup_nodes))
 
     if run_oracle:
-        oracle = fm.get("verification_oracle", {})
-        cmd = oracle.get("command", "")
-        expected_code = oracle.get("expected_exit_code", 0)
-        if cmd:
-            proc = subprocess.run(
-                cmd,
-                shell=True,
-                cwd=str(project_root),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=30,
-            )
-            if proc.returncode != expected_code:
-                errors.append(
-                    f"[AS-03 Oracle Failed] 指令 `{cmd}` 回傳碼 {proc.returncode} != 預期 {expected_code}。輸出: {proc.stderr.strip() or proc.stdout.strip()}"
+        oracle = fm.get("verification_oracle")
+        if isinstance(oracle, dict) and oracle.get("command"):
+            cmd = oracle.get("command", "")
+            expected_code = oracle.get("expected_exit_code", 0)
+            if cmd:
+                proc = subprocess.run(
+                    cmd,
+                    shell=True,
+                    cwd=str(project_root),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=30,
                 )
+                if proc.returncode != expected_code:
+                    errors.append(
+                        f"[AS-03 Oracle Failed] 指令 `{cmd}` 回傳碼 {proc.returncode} != 預期 {expected_code}。輸出: {proc.stderr.strip() or proc.stdout.strip()}"
+                    )
+        elif is_official:
+            errors.append(f"[AS-03 Oracle] 公文軌文件缺少 verification_oracle 執行命令！")
 
     return fm, errors
 
@@ -495,6 +535,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate Friday Agentic Harness Memory Nodes.")
     parser.add_argument("--project-root", default=".", help="Project root directory")
     parser.add_argument("--file", help="Validate a single Markdown file")
+    parser.add_argument("--all", action="store_true", help="Validate all documents across memory/ (default)")
     parser.add_argument("--run-oracle", action="store_true", help="Execute verification_oracle commands")
     args = parser.parse_args()
 

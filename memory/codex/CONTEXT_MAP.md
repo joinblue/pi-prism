@@ -1,36 +1,42 @@
 # 🗺️ PotoTypeV0 × Friday Context Registry & Topology Map (CONTEXT_MAP.md)
 
-> **自動生成時間**: `2026-10-29T16:43:57Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `13`
+> **自動生成時間**: `2026-10-30T13:17:50Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `14`
 > **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入活躍節點 (`verified`/`draft`) 之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。
 
 ## 1. 領域分層索引表 (Domain Layer Registry 000–900)
 
-### 🧩 `000` — 000 核心憲法與認知規範 (Core Constitution & Epistemic Rules)
+### 🧩 `000` — 000 Core Constitution & Soul (核心憲法與靈魂)
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
 | `000.SOUL.v1` | `MEM-2026-0001` | `constitution` | `verified` | `deepseek-ai/deepseek-v4.1-flash` ➔ `z-ai/glm-5.3` | Friday Agentic Harness 核心憲法：定義四級認知誠實標籤、跨模型對抗審查與獨立驗證斷言 (Oracle) 鐵律。 | [000_SOUL.md](000_SOUL.md) |
 
-### 🧩 `100` — 100 安全邊界與工作區護欄 (Workspace Boundary & Security Guard)
+### 🧩 `100` — 100 System Architecture & Security Guardrails (系統架構與安全護欄)
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
 | `100.ARCH-RULES.v1` | `MEM-2026-0002` | `rule` | `verified` | `deepseek-ai/deepseek-v4.1-flash` ➔ `z-ai/glm-5.3` | 定義 Friday Harness 之工作區邊界護欄：鎖定 ctx.cwd、保護 .Friday 大腦核心 (SEC-BRAIN)、隔離金鑰 (SEC-CRED)、根目錄 .md 保護 (SEC-DOC-GOVERNANCE) 與攔截危險指令。 | [100_ARCH_RULES.md](100_ARCH_RULES.md) |
 
-### 🧩 `200` — 200 架構決策與跨模型審查 (Architecture Decisions & Cross-Review)
+### 🧩 `200` — 200 Optimization Roadmap & Epistemic Governance (優化藍圖與認識論治理)
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
 | `200.ADR-001.v1` | `MEM-2026-0003` | `adr` | `verified` | `deepseek-ai/deepseek-v4.1-flash` ➔ `z-ai/glm-5.3` | ADR-001：採用 Pi v1.3.0 registerVirtualModel 實作 pi-router/auto 動態路由，並配置 5 角色跨模型子代理協作團隊。 | [200_DECISIONS.md](200_DECISIONS.md) |
 | `200.OPT-ROADMAP.v1` | `MEM-2026-0007` | `spec` | `verified` | `deepseek-ai/deepseek-v4.1-flash` ➔ `z-ai/glm-5.3` | PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。 | [200_OPTIMIZATION_ROADMAP.md](../specs/200_OPTIMIZATION_ROADMAP.md) |
 
-### 🧩 `300` — 300 核心領域邏輯與模組 (Core Domain Modules)
+### 🧩 `300` — 300 Core Domain Logic & Modules (核心領域邏輯與模組)
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
-| `300.LEDGER.v1` | `MEM-2026-0008` | `spec` | `verified` | `google-vertex/gemini-4-argon` ➔ `deepseek-ai/deepseek-v4.1-flash` | 專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。 | [LEDGER.md](../LEDGER.md) |
+| `300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1` | `MEM-2026-0015` | `spec` | `verified` | `google-vertex/gemini-4-argon` ➔ `nvidia/nemotron-3-ultra-550b-a55b` | 圖書館/公文 Schema 擴充與雙腦絲滑分派總藍圖：確立記憶圖書館與 Wiki 為核心主題、改造無感透明代讀 Router 並定義 AGY Teamwork 分層派工矩陣。 | [640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md](../specs/640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md) |
 
-### 🧩 `500` — 500 動態模型路由與子代理編排 (Model Routing & Subagents)
+### 🧩 `310` — 310 Library Wiki & Knowledge Graph Notes (知識庫 Wiki 與圖譜筆記)
+
+| 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
+| :--- | :--- | :---: | :---: | :--- | :--- | :--- |
+| `310.WIKI-GRAPH-GUIDE.v1` | `MEM-2026-0016` | `wiki` | `verified` | `flash` ➔ `None` | Friday Library Wiki and Bidirectional Knowledge Graph Guide | [310_WIKI_GRAPH_GUIDE.md](../wiki/310_WIKI_GRAPH_GUIDE.md) |
+
+### 🧩 `500` — 500 Agentic Harness & Prompt Contracts (代理控制軛與提示詞契約)
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
@@ -40,14 +46,14 @@
 | `500.PULSE-SCHEDULER.v1` | `MEM-2026-0011` | `spec` | `draft` | `google-vertex/gemini-4-argon` ➔ `deepseek-ai/deepseek-v4.1-flash` | Friday Pulse 智慧背景排程初步藍圖：定義定時/事件/動態心跳三模態觸發、免費 Scout 前哨過濾與收件匣隔離簽核機制。 | [620_FRIDAY_PULSE_SCHEDULER_SPEC.md](../specs/620_FRIDAY_PULSE_SCHEDULER_SPEC.md) |
 | `500.HARNESS-DETAX.v1` | `MEM-2026-0014` | `spec` | `verified` | `google-vertex/gemini-4-argon` ➔ `nvidia/nemotron-3-ultra-550b-a55b` | Friday 框架減稅與正交重構規格：消除雙重抽稅、賦予專家唯讀視野、收斂 SEC-DOC-GOVERNANCE 為根目錄保護並重構精簡角色 Prompt。 | [630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md](../specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md) |
 
-### 🧩 `600` — 600 驗證斷言、測試與安全稽核 (Verification Oracles & Audits)
+### 🧩 `600` — 600 Verification Oracles & Testing (驗證神諭與測試基準)
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
 | `600.AUDIT-001.v1` | `MEM-2026-0004` | `audit` | `deprecated` | `poolside/laguna-xs-2.1` ➔ `z-ai/glm-5.3-flash` | PotoTypeV0 專案與 Friday Agentic Harness 初始化驗收紀錄：記錄四大核心模組之驗收基準與依賴拓撲。 | [MEM-2026-0004_HARNESS_INIT_AUDIT.md](../audits/MEM-2026-0004_HARNESS_INIT_AUDIT.md) |
 | `600.AUDIT-002.v1` | `MEM-2026-0009` | `audit` | `deprecated` | `google-vertex/gemini-4-argon` ➔ `nvidia/nemotron-3-ultra-550b-a55b` | WO-2026-R1 (M1~M7) 與 Stage 4~5 壓力測試驗收報告：記錄已通過之防禦機制與待修復之 4 項執行期瓶頸。 | [MEM-2026-0009_ROUTER_STRESS_AUDIT.md](../audits/MEM-2026-0009_ROUTER_STRESS_AUDIT.md) |
 
-### 🧩 `700` — 700 可攜式部署與容器封裝 (Portable Brain & Containerization)
+### 🧩 `700` — 700 Operations, Telemetry & Runtime (維運、遙測與執行期治理)
 
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
@@ -57,9 +63,6 @@
 
 ```mermaid
 flowchart TD
-    MEM_2026_0008["MEM-2026-0008"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
-    MEM_2026_0008["MEM-2026-0008"] -->|"depends_on"| MEM_2026_0007["MEM-2026-0007"]
-    MEM_2026_0008["MEM-2026-0008"] -->|"depends_on"| MEM_2026_0014["MEM-2026-0014"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
     MEM_2026_0004["MEM-2026-0004"] -->|"depends_on"| MEM_2026_0003["MEM-2026-0003"]
@@ -90,9 +93,16 @@ flowchart TD
     MEM_2026_0014["MEM-2026-0014"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
     MEM_2026_0014["MEM-2026-0014"] -->|"depends_on"| MEM_2026_0010["MEM-2026-0010"]
     MEM_2026_0014["MEM-2026-0014"] -->|"depends_on"| MEM_2026_0005["MEM-2026-0005"]
+    MEM_2026_0015["MEM-2026-0015"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
+    MEM_2026_0015["MEM-2026-0015"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
+    MEM_2026_0015["MEM-2026-0015"] -->|"depends_on"| MEM_2026_0007["MEM-2026-0007"]
+    MEM_2026_0015["MEM-2026-0015"] -->|"depends_on"| MEM_2026_0014["MEM-2026-0014"]
+    MEM_2026_0015["MEM-2026-0015"] -->|"depends_on"| MEM_2026_0005["MEM-2026-0005"]
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0002["MEM-2026-0002"]
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0003["MEM-2026-0003"]
+    MEM_2026_0016["MEM-2026-0016"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
+    MEM_2026_0016["MEM-2026-0016"] -->|"depends_on"| MEM_2026_0015["MEM-2026-0015"]
     MEM_2026_0010["MEM-2026-0010"] -->|"supersedes"| MEM_2026_0009["MEM-2026-0009"]
 ```
 
@@ -108,7 +118,6 @@ flowchart TD
 | `.Friday/extensions/epistemic-gate.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
 | `.Friday/extensions/model-router.ts` | `@earendil-works/pi-ai` | `ts_sdk_import` |
 | `.Friday/extensions/model-router.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
-| `.Friday/extensions/model-router.ts` | `.Friday/extensions/epistemic-gate.ts` | `ts_local_import` |
 | `.Friday/extensions/subagent/agents.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
 | `.Friday/extensions/subagent/index.ts` | `@earendil-works/pi-agent-core` | `ts_sdk_import` |
 | `.Friday/extensions/subagent/index.ts` | `@earendil-works/pi-ai` | `ts_sdk_import` |

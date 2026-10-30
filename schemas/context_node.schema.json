@@ -5,8 +5,7 @@
   "description": "漸進式 Context 揭露索引節點與依賴拓撲圖 Schema：支援領域分層碼 (000-900)、多維度標籤、單行摘要與雙向 DAG 依賴拓撲。",
   "type": "object",
   "required": [
-    "context_index",
-    "topology"
+    "context_index"
   ],
   "properties": {
     "context_index": {
@@ -23,6 +22,35 @@
           "type": "string",
           "pattern": "^[0-9]{3}$",
           "description": "領域分層碼：000(核心憲法), 100(安全邊界與護欄), 200(ADR架構決策), 300(核心業務邏輯), 400(Extensions與Hooks), 500(動態路由與子代理), 600(驗證與稽核報告), 700(可攜式部署與容器), 800(外部參考規格), 900(歷史封存)"
+        },
+        "domain": {
+          "type": "string",
+          "pattern": "^[0-9]{3}$",
+          "description": "領域分層碼別名 (相容性欄位)"
+        },
+        "subdomain": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{3}$",
+          "description": "選填子分類領域碼 (例如: 310, 510)"
+        },
+        "artifact_track": {
+          "type": "string",
+          "enum": ["official", "wiki"],
+          "description": "所屬館藏軌道 (official: 公文館, wiki: 圖書館開架區)"
+        },
+        "outbound_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "內文主動引用的 Wiki 連結清單 ([[node_key]] 或 [[MEM-YYYY-XXXX]])"
+        },
+        "backlinks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "反向參照本節點的其他節點清單"
         },
         "node_key": {
           "type": "string",
@@ -99,9 +127,57 @@
             "type": "string"
           },
           "description": "本節點約束或影響之專案相對路徑清單"
+        },
+        "subdomain": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{3}$",
+          "description": "選填子分類領域碼 (例如: 310, 510)"
+        },
+        "artifact_track": {
+          "type": "string",
+          "enum": ["official", "wiki"],
+          "description": "所屬館藏軌道 (official: 公文館, wiki: 圖書館開架區)"
+        },
+        "outbound_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "內文主動引用的 Wiki 連結清單 ([[node_key]] 或 [[MEM-YYYY-XXXX]])"
+        },
+        "backlinks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "反向參照本節點的其他節點清單"
         }
       },
       "additionalProperties": false
+    },
+    "subdomain": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{3}$",
+      "description": "選填子分類領域碼 (例如: 310, 510)"
+    },
+    "artifact_track": {
+      "type": "string",
+      "enum": ["official", "wiki"],
+      "description": "所屬館藏軌道 (official: 公文館, wiki: 圖書館開架區)"
+    },
+    "outbound_links": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "內文主動引用的 Wiki 連結清單 ([[node_key]] 或 [[MEM-YYYY-XXXX]])"
+    },
+    "backlinks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "反向參照本節點的其他節點清單"
     }
   }
 }

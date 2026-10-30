@@ -2,13 +2,29 @@
   "schema_version": "2.2.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-29T16:43:57Z",
-  "total_nodes": 13,
+  "generated_at": "2026-10-30T13:17:50Z",
+  "total_nodes": 14,
   "healed_links": [],
   "pending_topology_alignments": [],
+  "domain_stats": {
+    "000": 1,
+    "100": 1,
+    "200": 2,
+    "300": 1,
+    "310": 1,
+    "320": 0,
+    "330": 0,
+    "400": 0,
+    "500": 5,
+    "510": 0,
+    "600": 2,
+    "700": 1,
+    "800": 0,
+    "900": 0
+  },
   "domain_registry": {
     "000": {
-      "title": "000 核心憲法與認知規範 (Core Constitution & Epistemic Rules)",
+      "title": "000 Core Constitution & Soul (核心憲法與靈魂)",
       "count": 1,
       "items": [
         {
@@ -18,6 +34,13 @@
           "access_tier": "immutable",
           "priority": "critical",
           "domain_code": "000",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [
+            "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
+            "310.WIKI-GRAPH-GUIDE.v1"
+          ],
           "node_key": "000.SOUL.v1",
           "facet_tags": [
             "Friday:Governance:Meta:Constitution",
@@ -43,7 +66,7 @@
       ]
     },
     "100": {
-      "title": "100 安全邊界與工作區護欄 (Workspace Boundary & Security Guard)",
+      "title": "100 System Architecture & Security Guardrails (系統架構與安全護欄)",
       "count": 1,
       "items": [
         {
@@ -53,6 +76,10 @@
           "access_tier": "restricted",
           "priority": "critical",
           "domain_code": "100",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "100.ARCH-RULES.v1",
           "facet_tags": [
             "Friday:Security:Hook:BoundaryGuard",
@@ -80,7 +107,7 @@
       ]
     },
     "200": {
-      "title": "200 架構決策與跨模型審查 (Architecture Decisions & Cross-Review)",
+      "title": "200 Optimization Roadmap & Epistemic Governance (優化藍圖與認識論治理)",
       "count": 2,
       "items": [
         {
@@ -90,6 +117,10 @@
           "access_tier": "standard",
           "priority": "high",
           "domain_code": "200",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "200.ADR-001.v1",
           "facet_tags": [
             "Friday:Orchestration:Router:VirtualModel",
@@ -120,6 +151,10 @@
           "access_tier": "standard",
           "priority": "critical",
           "domain_code": "200",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "200.OPT-ROADMAP.v1",
           "facet_tags": [
             "PotoTypeV0:Evolution:Roadmap:Spec",
@@ -162,53 +197,124 @@
       ]
     },
     "300": {
-      "title": "300 核心領域邏輯與模組 (Core Domain Modules)",
+      "title": "300 Core Domain Logic & Modules (核心領域邏輯與模組)",
       "count": 1,
       "items": [
         {
-          "node_id": "MEM-2026-0008",
+          "node_id": "MEM-2026-0015",
           "artifact_type": "spec",
           "status": "verified",
           "access_tier": "standard",
-          "priority": "high",
+          "priority": "critical",
           "domain_code": "300",
-          "node_key": "300.LEDGER.v1",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [
+            "000.SOUL.v1"
+          ],
+          "backlinks": [
+            "310.WIKI-GRAPH-GUIDE.v1"
+          ],
+          "node_key": "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
           "facet_tags": [
-            "PotoTypeV0:Workflow:Ledger:ActiveTasks",
-            "Friday:Governance:Memory:Ledger"
+            "Friday:Memory:LibraryWiki:Blueprint",
+            "Friday:Routing:SeamlessOffload:Spec",
+            "PiPrism:Teamwork:MultiTierExecution:Plan"
           ],
           "keywords": [
-            "LEDGER",
-            "Active Tasks",
-            "Work Orders",
-            "Stage Tracking"
+            "Library Schema Extensibility",
+            "Official Document vs Wiki",
+            "Taxonomy Registry",
+            "Seamless Read Offload",
+            "Dream Consolidation",
+            "AGY Teamwork Matrix"
           ],
-          "summary_1line": "專案唯一活躍工單台帳 (LEDGER.md)：嚴格限制總行數 <= 80 行，僅追蹤進行中任務，完工項目即刻歸檔。",
-          "path": "memory/LEDGER.md",
-          "sha256_16": "3fdba1e657e8b09f",
+          "summary_1line": "圖書館/公文 Schema 擴充與雙腦絲滑分派總藍圖：確立記憶圖書館與 Wiki 為核心主題、改造無感透明代讀 Router 並定義 AGY Teamwork 分層派工矩陣。",
+          "path": "memory/specs/640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md",
+          "sha256_16": "a103c136ca0ad155",
           "author_model": "google-vertex/gemini-4-argon",
-          "reviewer_model": "deepseek-ai/deepseek-v4.1-flash",
+          "reviewer_model": "nvidia/nemotron-3-ultra-550b-a55b",
           "depends_on": [
             "000.SOUL.v1",
+            "100.ARCH-RULES.v1",
             "200.OPT-ROADMAP.v1",
-            "500.HARNESS-DETAX.v1"
+            "500.HARNESS-DETAX.v1",
+            "700.HARNESS-BLUEPRINT.v1"
           ],
           "affected_paths": [
-            "memory/specs/200_OPTIMIZATION_ROADMAP.md",
-            "memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md",
+            ".Friday/extensions/epistemic-gate.ts",
+            ".Friday/extensions/model-router.ts",
             ".Friday/extensions/workspace-guard.ts",
-            ".Friday/extensions/model-router.ts"
+            ".Friday/extensions/subagent/index.ts",
+            "schemas/artifact_header.schema.json",
+            "schemas/context_node.schema.json",
+            "schemas/schema_validator.py",
+            "scripts/auto_update_map.py",
+            "scripts/sync_doc_metadata.py"
           ]
         }
       ]
     },
+    "310": {
+      "title": "310 Library Wiki & Knowledge Graph Notes (知識庫 Wiki 與圖譜筆記)",
+      "count": 1,
+      "items": [
+        {
+          "node_id": "MEM-2026-0016",
+          "artifact_type": "wiki",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "normal",
+          "domain_code": "310",
+          "subdomain": "310",
+          "artifact_track": "wiki",
+          "outbound_links": [
+            "000.SOUL.v1",
+            "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1"
+          ],
+          "backlinks": [],
+          "node_key": "310.WIKI-GRAPH-GUIDE.v1",
+          "facet_tags": [
+            "Library:Wiki:Guide:wiki"
+          ],
+          "keywords": [
+            "wiki",
+            "knowledge",
+            "graph",
+            "links"
+          ],
+          "summary_1line": "Friday Library Wiki and Bidirectional Knowledge Graph Guide",
+          "path": "memory/wiki/310_WIKI_GRAPH_GUIDE.md",
+          "sha256_16": "fe7d4d4c28eeaa7b",
+          "author_model": "flash",
+          "reviewer_model": null,
+          "depends_on": [
+            "000.SOUL.v1",
+            "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1"
+          ],
+          "affected_paths": [
+            "memory/wiki/310_WIKI_GRAPH_GUIDE.md"
+          ]
+        }
+      ]
+    },
+    "320": {
+      "title": "320 Domain Workflows & SOPs (領域工作流程與標準作業程序)",
+      "count": 0,
+      "items": []
+    },
+    "330": {
+      "title": "330 Domain Glossaries & Ontologies (領域詞彙表與本體庫)",
+      "count": 0,
+      "items": []
+    },
     "400": {
-      "title": "400 工具鏈、Hooks 與擴充套件 (Tools, Hooks & Extensions)",
+      "title": "400 Data Schemas & Storage Protocols (資料綱要與儲存協定)",
       "count": 0,
       "items": []
     },
     "500": {
-      "title": "500 動態模型路由與子代理編排 (Model Routing & Subagents)",
+      "title": "500 Agentic Harness & Prompt Contracts (代理控制軛與提示詞契約)",
       "count": 5,
       "items": [
         {
@@ -218,6 +324,10 @@
           "access_tier": "standard",
           "priority": "high",
           "domain_code": "500",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "500.MODEL-APIKEY-SPEC.v1",
           "facet_tags": [
             "Friday:Routing:ModelPool:Spec",
@@ -259,6 +369,10 @@
           "access_tier": "standard",
           "priority": "high",
           "domain_code": "500",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "510.MODEL-POOL-PLANNING.v1",
           "facet_tags": [
             "Friday:Routing:ModelPool:Planning",
@@ -305,6 +419,10 @@
           "access_tier": "standard",
           "priority": "critical",
           "domain_code": "500",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "500.ROUTER-V2-MULTITURN.v1",
           "facet_tags": [
             "Friday:Routing:MultiTurnSpecialist:Spec",
@@ -354,6 +472,10 @@
           "access_tier": "standard",
           "priority": "high",
           "domain_code": "500",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "500.PULSE-SCHEDULER.v1",
           "facet_tags": [
             "Friday:Automation:PulseScheduler:Spec",
@@ -392,6 +514,10 @@
           "access_tier": "standard",
           "priority": "high",
           "domain_code": "500",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "500.HARNESS-DETAX.v1",
           "facet_tags": [
             "Friday:Architecture:Spec:DetaxOrthogonality",
@@ -432,8 +558,13 @@
         }
       ]
     },
+    "510": {
+      "title": "510 Model Pool & Routing Strategy (模型池與路由策略)",
+      "count": 0,
+      "items": []
+    },
     "600": {
-      "title": "600 驗證斷言、測試與安全稽核 (Verification Oracles & Audits)",
+      "title": "600 Verification Oracles & Testing (驗證神諭與測試基準)",
       "count": 2,
       "items": [
         {
@@ -443,6 +574,10 @@
           "access_tier": "standard",
           "priority": "normal",
           "domain_code": "600",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "600.AUDIT-001.v1",
           "facet_tags": [
             "PotoTypeV0:Verification:Audit:InitReport"
@@ -475,6 +610,10 @@
           "access_tier": "standard",
           "priority": "high",
           "domain_code": "600",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "600.AUDIT-002.v1",
           "facet_tags": [
             "Friday:Routing:StressTest:Audit",
@@ -510,7 +649,7 @@
       ]
     },
     "700": {
-      "title": "700 可攜式部署與容器封裝 (Portable Brain & Containerization)",
+      "title": "700 Operations, Telemetry & Runtime (維運、遙測與執行期治理)",
       "count": 1,
       "items": [
         {
@@ -520,6 +659,10 @@
           "access_tier": "standard",
           "priority": "high",
           "domain_code": "700",
+          "subdomain": null,
+          "artifact_track": "official",
+          "outbound_links": [],
+          "backlinks": [],
           "node_key": "700.HARNESS-BLUEPRINT.v1",
           "facet_tags": [
             "Friday:Harness:PortableBrain:Spec",
@@ -556,32 +699,17 @@
       ]
     },
     "800": {
-      "title": "800 外部規格與參考文獻 (External Specs & References)",
+      "title": "800 External Integrations & Tooling (外部整合與工具鏈)",
       "count": 0,
       "items": []
     },
     "900": {
-      "title": "900 歷史封存節點 (Archived & Superseded Nodes)",
+      "title": "900 Audits, Postmortems & Historical Ledgers (審計、事後檢討與歷史帳本)",
       "count": 0,
       "items": []
     }
   },
   "causal_topology_edges": [
-    {
-      "from": "MEM-2026-0008",
-      "to": "MEM-2026-0001",
-      "relation": "depends_on"
-    },
-    {
-      "from": "MEM-2026-0008",
-      "to": "MEM-2026-0007",
-      "relation": "depends_on"
-    },
-    {
-      "from": "MEM-2026-0008",
-      "to": "MEM-2026-0014",
-      "relation": "depends_on"
-    },
     {
       "from": "MEM-2026-0004",
       "to": "MEM-2026-0001",
@@ -733,6 +861,31 @@
       "relation": "depends_on"
     },
     {
+      "from": "MEM-2026-0015",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0015",
+      "to": "MEM-2026-0002",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0015",
+      "to": "MEM-2026-0007",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0015",
+      "to": "MEM-2026-0014",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0015",
+      "to": "MEM-2026-0005",
+      "relation": "depends_on"
+    },
+    {
       "from": "MEM-2026-0005",
       "to": "MEM-2026-0001",
       "relation": "depends_on"
@@ -745,6 +898,16 @@
     {
       "from": "MEM-2026-0005",
       "to": "MEM-2026-0003",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0016",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0016",
+      "to": "MEM-2026-0015",
       "relation": "depends_on"
     },
     {
@@ -793,11 +956,6 @@
       "from": ".Friday/extensions/model-router.ts",
       "to": "@earendil-works/pi-coding-agent",
       "type": "ts_sdk_import"
-    },
-    {
-      "from": ".Friday/extensions/model-router.ts",
-      "to": ".Friday/extensions/epistemic-gate.ts",
-      "type": "ts_local_import"
     },
     {
       "from": ".Friday/extensions/subagent/agents.ts",

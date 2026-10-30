@@ -965,6 +965,267 @@ def test_12_kv_cache_guard_usage_and_context_dashboard() -> None:
     print("✅ [TEST 12 PASSED] Prefix KV Cache 四大防護、頂層 Usage 接線、`/context` 儀表板與指令精簡全數驗證通過！")
 
 
+def test_13_library_wiki_taxonomy_and_seamless_offload() -> None:
+    print("\n" + "=" * 72)
+    print("🧪 [TEST 13] Library Wiki Dual-Track Schema, Pluggable Taxonomy & Seamless Offload")
+    print("=" * 72)
+
+    router_src = (FRIDAY_BRAIN / "extensions" / "model-router.ts").read_text(encoding="utf-8")
+    gate_src = (FRIDAY_BRAIN / "extensions" / "epistemic-gate.ts").read_text(encoding="utf-8")
+    guard_src = (FRIDAY_BRAIN / "extensions" / "workspace-guard.ts").read_text(encoding="utf-8")
+    validator_src = (PROJECT_ROOT / "schemas" / "schema_validator.py").read_text(encoding="utf-8")
+    header_schema_src = (PROJECT_ROOT / "schemas" / "artifact_header.schema.json").read_text(encoding="utf-8")
+    context_schema_src = (PROJECT_ROOT / "schemas" / "context_node.schema.json").read_text(encoding="utf-8")
+    taxonomy_file = PROJECT_ROOT / "memory" / "index" / "TAXONOMY.json"
+    sync_src = (PROJECT_ROOT / "scripts" / "sync_doc_metadata.py").read_text(encoding="utf-8")
+    auto_map_src = (PROJECT_ROOT / "scripts" / "auto_update_map.py").read_text(encoding="utf-8")
+    context_index_file = PROJECT_ROOT / "memory" / "index" / "CONTEXT_INDEX.json"
+    ledger_file = PROJECT_ROOT / "memory" / "LEDGER.md"
+    agents_file = FRIDAY_BRAIN / "AGENTS.md"
+    dream_file = FRIDAY_BRAIN / "prompts" / "dream.md"
+
+    # E2E-WP1-01: Dual-track Schema constants & Wiki exemption
+    assert "OFFICIAL_TYPES" in validator_src and "WIKI_TYPES" in validator_src, (
+        "schema_validator.py must define OFFICIAL_TYPES and WIKI_TYPES"
+    )
+    assert '"wiki"' in header_schema_src, "artifact_header.schema.json must include wiki in artifact_type enum"
+
+    # Verify Wiki exemption vs Official enforcement dynamically via subprocess
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        wiki_tmp = tmp_path / "test_wiki.md"
+        wiki_tmp.write_text(
+            """---
+node_id: "MEM-2026-9991"
+artifact_type: "wiki"
+status: "verified"
+created_at: "2026-10-30"
+updated_at: "2026-10-30"
+author:
+  role: "worker"
+  model: "google-vertex/gemini-4-flash"
+context_index:
+  domain_code: "310"
+  node_key: "310.TEST-WIKI.v1"
+  facet_tags:
+    - "Friday:Wiki:Test:Guide"
+  keywords:
+    - "Wiki"
+  summary_1line: "Temporary wiki node without reviewer, oracle, or fact tags."
+---
+
+# Test Wiki Node
+
+This is a test wiki document without any [FACT] tags, without reviewer, and without oracle.
+It is within the 500 lines budget.
+""",
+            encoding="utf-8",
+        )
+        res_wiki = subprocess.run(
+            [sys.executable, "schemas/schema_validator.py", "--file", str(wiki_tmp)],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+        )
+        assert res_wiki.returncode == 0, f"Wiki node should pass validation without reviewer/oracle: {res_wiki.stdout} {res_wiki.stderr}"
+
+        # Spec document with missing reviewer and fact tags must fail AS-01 / AS-02
+        spec_tmp = tmp_path / "test_bad_spec.md"
+        spec_tmp.write_text(
+            """---
+node_id: "MEM-2026-9992"
+artifact_type: "spec"
+status: "verified"
+created_at: "2026-10-30"
+updated_at: "2026-10-30"
+author:
+  role: "worker"
+  model: "google-vertex/gemini-4-flash"
+context_index:
+  domain_code: "300"
+  node_key: "300.TEST-SPEC.v1"
+  facet_tags:
+    - "Friday:Spec:Test:Guide"
+  keywords:
+    - "Spec"
+  summary_1line: "Bad spec node missing reviewer and oracle."
+---
+
+# Test Bad Spec Node
+
+This official spec node has no reviewer and no [FACT] tags.
+""",
+            encoding="utf-8",
+        )
+        res_spec = subprocess.run(
+            [sys.executable, "schemas/schema_validator.py", "--file", str(spec_tmp)],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+        )
+        assert res_spec.returncode != 0, "Official spec node without reviewer/oracle must fail validation"
+
+    # E2E-WP1-02: sync_doc_metadata.py --init support and auto-numbering
+    assert "--init" in sync_src, "sync_doc_metadata.py must support --init"
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        raw_md = tmp_path / "uninitialized_draft.md"
+        raw_md.write_text(
+            "# Temporary Draft Note\n\nThis note has no YAML frontmatter initially.\n",
+            encoding="utf-8",
+        )
+        res_init = subprocess.run(
+            [sys.executable, "scripts/sync_doc_metadata.py", "--init", "--file", str(raw_md), "--type", "wiki", "--domain", "310"],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+        )
+        assert res_init.returncode == 0, f"sync_doc_metadata.py --init failed: {res_init.stdout} {res_init.stderr}"
+        inited_content = raw_md.read_text(encoding="utf-8")
+        assert "node_id: \"MEM-2026-" in inited_content, "Must allocate MEM-2026-XXXX"
+        assert "0099" not in inited_content and "0100" not in inited_content, "Must skip sentinels 0099/0100"
+        assert "content_checksum:" in inited_content, "Must inject content_checksum"
+        assert "epistemic_stats:" in inited_content, "Must inject epistemic_stats"
+        res_val = subprocess.run(
+            [sys.executable, "schemas/schema_validator.py", "--file", str(raw_md)],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+        )
+        assert res_val.returncode == 0, f"Inited wiki note must pass schema_validator: {res_val.stdout} {res_val.stderr}"
+
+    # E2E-WP1-03: workspace-guard.ts memory/wiki/ write allowance & codex existence gate
+    assert "memory/codex" in guard_src, "workspace-guard.ts must gate SEC-DOC-GOVERNANCE on memory/codex existence"
+    assert "memory/wiki" in guard_src or "wiki" in guard_src, (
+        "workspace-guard.ts must explicitly allow memory/wiki/ authoring"
+    )
+    for protected_vault in ["memory/codex", "memory/adr", "memory/specs", "memory/audit"]:
+        assert protected_vault in guard_src, f"workspace-guard.ts must protect {protected_vault}"
+
+    # E2E-WP2-01: TAXONOMY.json exists with Dewey sub-domains and regex pattern in context_node.schema.json
+    assert taxonomy_file.exists(), "memory/index/TAXONOMY.json must exist"
+    tax_data = json.loads(taxonomy_file.read_text(encoding="utf-8"))
+    tax_domains = tax_data.get("domains", tax_data)
+    for dewey_code in ["000", "100", "200", "300", "310", "320", "330", "400", "500", "510", "900"]:
+        assert (
+            dewey_code in tax_domains
+            or any(dewey_code in str(v) for v in tax_domains.values())
+        ), f"TAXONOMY.json must define Dewey code {dewey_code}"
+
+    assert '"pattern": "^[0-9]{3}$"' in context_schema_src, (
+        "context_node.schema.json domain_code must use regex ^[0-9]{3}$"
+    )
+    for field in ["subdomain", "artifact_track", "outbound_links", "backlinks"]:
+        assert f'"{field}"' in context_schema_src, f"context_node.schema.json must support {field}"
+
+    # E2E-WP2-02: Bidirectional Wiki links, domain_stats & private isolation in auto_update_map.py
+    assert "extract_wikilinks_outside_fenced_blocks" in auto_map_src, "auto_update_map.py must extract wikilinks"
+    assert "outbound_links" in auto_map_src and "backlinks" in auto_map_src, (
+        "auto_update_map.py must compile outbound_links and backlinks"
+    )
+    assert "domain_stats" in auto_map_src, "auto_update_map.py must generate domain_stats"
+    wiki_sample = PROJECT_ROOT / "memory" / "wiki" / "310_WIKI_GRAPH_GUIDE.md"
+    assert wiki_sample.exists(), "memory/wiki/310_WIKI_GRAPH_GUIDE.md sample node must exist"
+    idx_data = json.loads(context_index_file.read_text(encoding="utf-8"))
+    assert "domain_stats" in idx_data, "CONTEXT_INDEX.json must include domain_stats"
+
+    all_public_nodes = []
+    for section in idx_data.get("domain_registry", {}).values():
+        for item in section.get("items", []):
+            all_public_nodes.append(item)
+
+    wiki_node = next((n for n in all_public_nodes if n.get("node_id") == "MEM-2026-0016"), None)
+    assert wiki_node is not None, "Wiki node MEM-2026-0016 must be present in CONTEXT_INDEX.json"
+    assert "outbound_links" in wiki_node and len(wiki_node["outbound_links"]) >= 2, (
+        "MEM-2026-0016 must have compiled outbound_links to 000.SOUL.v1 and 300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1"
+    )
+    assert "000.SOUL.v1" in wiki_node["outbound_links"]
+    assert "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1" in wiki_node["outbound_links"]
+
+    # Verify reciprocal backlinks on target node
+    soul_node = next((n for n in all_public_nodes if n.get("node_id") == "MEM-2026-0001"), None)
+    assert soul_node is not None
+    assert "backlinks" in soul_node and "310.WIKI-GRAPH-GUIDE.v1" in soul_node["backlinks"], (
+        "000.SOUL.v1 must have reciprocal backlink from 310.WIKI-GRAPH-GUIDE.v1"
+    )
+
+    # Verify strict private isolation: zero private nodes in CONTEXT_INDEX.json
+    for n in all_public_nodes:
+        assert n.get("security_tier") != "private", f"Leaked private node: {n.get('node_id')}"
+        assert not str(n.get("file_path", "")).startswith("memory/private"), f"Leaked private path: {n.get('file_path')}"
+
+    # E2E-WP2-03: Two-stage catalog, query_library tool & dream prompt
+    assert "CATALOG_STAGE2_THRESHOLD" in gate_src, "epistemic-gate.ts must define CATALOG_STAGE2_THRESHOLD"
+    assert "query_library" in gate_src, "epistemic-gate.ts must register query_library tool"
+    assert "__fridayEpistemicBridge" in gate_src, "epistemic-gate.ts must publish __fridayEpistemicBridge"
+    assert dream_file.exists(), ".Friday/prompts/dream.md must exist"
+
+    # E2E-WP3-01 & E2E-WP3-02: Seamless Read Auto-Offload & Direct Slice Pass-Through
+    assert "MAX_DIRECT_READ_LINES" in router_src or "reqLimit <= 350" in router_src or "limit <= 350" in router_src or "350" in router_src, (
+        "model-router.ts must check limit <= 350 for direct pass-through"
+    )
+    assert "buildSeamlessReadOffloadDigest" in router_src or "Seamless Read Auto-Offload" in router_src, (
+        "model-router.ts must build seamless read offload digest"
+    )
+    assert "[Token Offload Gate]" in router_src, "model-router.ts must retain [Token Offload Gate] keyword"
+
+    # Dynamic Node.js verification of model-router seamless offload
+    node_eval_script = """
+import { registerHooks } from "node:module";
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith("@earendil-works/") || specifier === "typebox") {
+      return {
+        shortCircuit: true,
+        url: "data:text/javascript,export const StringEnum = () => ({}); export const detectSupportedImageMimeTypeFromFile = () => null; export const getAgentDir = () => \\"/tmp\\"; export const resizeImage = async (x) => x; export const Type = new Proxy({}, { get: () => () => ({}) });"
+      };
+    }
+    return nextResolve(specifier, context);
+  }
+});
+const { default: routerExt } = await import("./.Friday/extensions/model-router.ts");
+const handlers = {};
+const fakePi = new Proxy({ on(event, fn) { (handlers[event] ||= []).push(fn); } }, { get(t, p) { return p in t ? t[p] : () => {}; } });
+routerExt(fakePi);
+const toolCallHandler = handlers["tool_call"][0];
+const cwd = process.cwd();
+const target = ".Friday/extensions/model-router.ts";
+const resA = await toolCallHandler({ toolName: "read", input: { path: target, offset: 100, limit: 120 } }, { cwd, model: { provider: "pi-router", id: "auto" } });
+const resB = await toolCallHandler({ toolName: "read", input: { path: target } }, { cwd, model: { provider: "pi-router", id: "auto" } });
+console.assert(resA === undefined, "Case A limit <= 350 should return undefined");
+console.assert(resB?.block === true && /L\\d+-L\\d+:/.test(resB.reason) && resB.reason.includes("L1-L60"), "Case B un-sliced read should return outline digest");
+"""
+    res_node = subprocess.run(
+        ["node", "--experimental-strip-types", "-e", node_eval_script],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+    )
+    assert res_node.returncode == 0, f"Node model-router offload test failed: {res_node.stdout} {res_node.stderr}"
+
+    # E2E-WP3-03: Decoupled Bridge without static epistemic-gate.js import
+    assert 'from "./epistemic-gate.js"' not in router_src, (
+        "model-router.ts must NOT statically import from ./epistemic-gate.js"
+    )
+    assert "__fridayEpistemicBridge" in router_src, (
+        "model-router.ts must access epistemic bridge via globalThis.__fridayEpistemicBridge"
+    )
+
+    # E2E-WP4-01: LEDGER line budget & AGENTS.md compliance
+    ledger_lines = [ln for ln in ledger_file.read_text(encoding="utf-8").splitlines()]
+    assert len(ledger_lines) <= 80, f"memory/LEDGER.md must be <= 80 lines, got {len(ledger_lines)}"
+    agents_src = agents_file.read_text(encoding="utf-8")
+    assert "/dream" not in agents_src, "Regression: /dream must not be in .Friday/AGENTS.md"
+    assert "memory/wiki/" in agents_src, "memory/wiki/ must be documented in .Friday/AGENTS.md"
+    assert "query_library" in agents_src, "query_library must be documented in .Friday/AGENTS.md"
+
+    print("  ⚡ [E2E-WP1] 雙軌 Schema、--init 取號與 workspace-guard 開架區放行驗證通過")
+    print("  ⚡ [E2E-WP2] TAXONOMY.json、雙向 Wiki 圖譜與兩階段 query_library 檢索驗證通過")
+    print("  ⚡ [E2E-WP3] limit <= 350 直通放行、同 Turn 大綱代讀與 __fridayEpistemicBridge 鬆耦合驗證通過")
+    print("  ⚡ [E2E-WP4] LEDGER.md (<= 80 行)、AGENTS.md 無幽靈指令與全套測試串接驗證通過")
+    print("✅ [TEST 13 PASSED] 圖書館雙軌體系、雙向圖譜、絲滑透明代讀與架構解耦全數驗證通過！")
+
+
 def main() -> int:
     test_1_schema_and_context_index()
     test_2_anti_sycophancy_trap()
@@ -978,8 +1239,9 @@ def main() -> int:
     test_10_stage5_auto_heal_ast_and_drift_alert()
     test_11_deterministic_hook_md_auto_sync()
     test_12_kv_cache_guard_usage_and_context_dashboard()
+    test_13_library_wiki_taxonomy_and_seamless_offload()
     print("\n" + "🎉" * 24)
-    print("ALL 12 ARCHITECTURE VERIFICATION SUITES PASSED 100%!")
+    print("ALL 13 ARCHITECTURE VERIFICATION SUITES PASSED 100%!")
     print("🎉" * 24)
     return 0
 

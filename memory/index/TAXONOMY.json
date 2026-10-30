@@ -1,0 +1,130 @@
+{
+  "$schema": "https://friday.pi-agent.local/schemas/taxonomy.schema.json",
+  "version": "1.0.0",
+  "domains": {
+    "000": {
+      "title": "Core Constitution & Soul (核心憲法與靈魂)",
+      "label": "Core Constitution & Soul",
+      "track_default": "official",
+      "always_pin": true,
+      "subdomains": {}
+    },
+    "100": {
+      "title": "System Architecture & Security Guardrails (系統架構與安全護欄)",
+      "label": "System Architecture & Security Guardrails",
+      "track_default": "official",
+      "always_pin": true,
+      "subdomains": {}
+    },
+    "200": {
+      "title": "Optimization Roadmap & Epistemic Governance (優化藍圖與認識論治理)",
+      "label": "Optimization Roadmap & Epistemic Governance",
+      "track_default": "official",
+      "always_pin": false,
+      "subdomains": {}
+    },
+    "300": {
+      "title": "Core Domain Logic & Modules (核心領域邏輯與模組)",
+      "label": "Core Domain Logic & Modules",
+      "track_default": "both",
+      "always_pin": false,
+      "subdomains": {
+        "310": {
+          "title": "Library Wiki & Knowledge Graph Notes (知識庫 Wiki 與圖譜筆記)",
+          "label": "Library Wiki & Knowledge Graph Notes",
+          "track_default": "wiki",
+          "always_pin": false
+        },
+        "320": {
+          "title": "Domain Workflows & SOPs (領域工作流程與標準作業程序)",
+          "label": "Domain Workflows & SOPs",
+          "track_default": "wiki",
+          "always_pin": false
+        },
+        "330": {
+          "title": "Domain Glossaries & Ontologies (領域詞彙表與本體庫)",
+          "label": "Domain Glossaries & Ontologies",
+          "track_default": "wiki",
+          "always_pin": false
+        }
+      }
+    },
+    "310": {
+      "title": "Library Wiki & Knowledge Graph Notes (知識庫 Wiki 與圖譜筆記)",
+      "label": "Library Wiki & Knowledge Graph Notes",
+      "track_default": "wiki",
+      "always_pin": false,
+      "parent": "300"
+    },
+    "320": {
+      "title": "Domain Workflows & SOPs (領域工作流程與標準作業程序)",
+      "label": "Domain Workflows & SOPs",
+      "track_default": "wiki",
+      "always_pin": false,
+      "parent": "300"
+    },
+    "330": {
+      "title": "Domain Glossaries & Ontologies (領域詞彙表與本體庫)",
+      "label": "Domain Glossaries & Ontologies",
+      "track_default": "wiki",
+      "always_pin": false,
+      "parent": "300"
+    },
+    "400": {
+      "title": "Data Schemas & Storage Protocols (資料綱要與儲存協定)",
+      "label": "Data Schemas & Storage Protocols",
+      "track_default": "both",
+      "always_pin": false,
+      "subdomains": {}
+    },
+    "500": {
+      "title": "Agentic Harness & Prompt Contracts (代理控制軛與提示詞契約)",
+      "label": "Agentic Harness & Prompt Contracts",
+      "track_default": "official",
+      "always_pin": false,
+      "subdomains": {
+        "510": {
+          "title": "Model Pool & Routing Strategy (模型池與路由策略)",
+          "label": "Model Pool & Routing Strategy",
+          "track_default": "both",
+          "always_pin": false
+        }
+      }
+    },
+    "510": {
+      "title": "Model Pool & Routing Strategy (模型池與路由策略)",
+      "label": "Model Pool & Routing Strategy",
+      "track_default": "both",
+      "always_pin": false,
+      "parent": "500"
+    },
+    "600": {
+      "title": "Verification Oracles & Testing (驗證神諭與測試基準)",
+      "label": "Verification Oracles & Testing",
+      "track_default": "both",
+      "always_pin": false,
+      "subdomains": {}
+    },
+    "700": {
+      "title": "Operations, Telemetry & Runtime (維運、遙測與執行期治理)",
+      "label": "Operations, Telemetry & Runtime",
+      "track_default": "both",
+      "always_pin": false,
+      "subdomains": {}
+    },
+    "800": {
+      "title": "External Integrations & Tooling (外部整合與工具鏈)",
+      "label": "External Integrations & Tooling",
+      "track_default": "wiki",
+      "always_pin": false,
+      "subdomains": {}
+    },
+    "900": {
+      "title": "Audits, Postmortems & Historical Ledgers (審計、事後檢討與歷史帳本)",
+      "label": "Audits, Postmortems & Historical Ledgers",
+      "track_default": "both",
+      "always_pin": false,
+      "subdomains": {}
+    }
+  }
+}

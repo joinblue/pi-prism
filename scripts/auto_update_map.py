@@ -24,18 +24,64 @@ from typing import Any, Dict, List
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "schemas"))
 from schema_validator import detect_unlinked_topology_references, parse_markdown_frontmatter  # type: ignore
 
-DOMAIN_LAYERS = {
+DEFAULT_DOMAIN_LAYERS = {
     "000": "000 核心憲法與認知規範 (Core Constitution & Epistemic Rules)",
     "100": "100 安全邊界與工作區護欄 (Workspace Boundary & Security Guard)",
     "200": "200 架構決策與跨模型審查 (Architecture Decisions & Cross-Review)",
     "300": "300 核心領域邏輯與模組 (Core Domain Modules)",
+    "310": "310 知識庫 Wiki 與圖譜筆記 (Library Wiki & Knowledge Graph Notes)",
+    "320": "320 領域工作流程與標準作業程序 (Domain Workflows & SOPs)",
+    "330": "330 領域詞彙表與本體庫 (Domain Glossaries & Ontologies)",
     "400": "400 工具鏈、Hooks 與擴充套件 (Tools, Hooks & Extensions)",
     "500": "500 動態模型路由與子代理編排 (Model Routing & Subagents)",
+    "510": "510 模型池與路由策略 (Model Pool & Routing Strategy)",
     "600": "600 驗證斷言、測試與安全稽核 (Verification Oracles & Audits)",
     "700": "700 可攜式部署與容器封裝 (Portable Brain & Containerization)",
     "800": "800 外部規格與參考文獻 (External Specs & References)",
     "900": "900 歷史封存節點 (Archived & Superseded Nodes)",
 }
+
+
+def load_domain_layers(project_root: Path) -> Dict[str, str]:
+    tax_path = project_root / "memory" / "index" / "TAXONOMY.json"
+    if tax_path.exists():
+        try:
+            data = json.loads(tax_path.read_text(encoding="utf-8"))
+            domains = data.get("domains", {})
+            layers: Dict[str, str] = {}
+            for k, v in domains.items():
+                title = v.get("title", k) if isinstance(v, dict) else str(v)
+                layers[k] = f"{k} {title}"
+            for k, v in DEFAULT_DOMAIN_LAYERS.items():
+                if k not in layers:
+                    layers[k] = v
+            return layers
+        except Exception:
+            pass
+    return dict(DEFAULT_DOMAIN_LAYERS)
+
+
+DOMAIN_LAYERS = dict(DEFAULT_DOMAIN_LAYERS)
+
+OFFICIAL_TYPES = {"constitution", "rule", "adr", "spec", "audit"}
+WIKI_TYPES = {"wiki", "note", "sop", "glossary", "digest"}
+WIKILINK_RE = re.compile(r"\[\[([A-Za-z0-9_.-]+)(?:\|[^\]]+)?\]\]")
+
+
+def extract_wikilinks_outside_fenced_blocks(body: str) -> List[str]:
+    links: List[str] = []
+    in_fence = False
+    for line in body.splitlines():
+        trimmed = line.strip()
+        if trimmed.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        for match in WIKILINK_RE.finditer(line):
+            links.append(match.group(1))
+    return sorted(list(set(links)))
+
 
 MD_LINK_PATTERN = re.compile(r"(\[[^\]]+\]\()([^)\s]+)(\))")
 TS_IMPORT_PATTERN = re.compile(r"""(?m)^\s*import\s+(?:type\s+)?(?:[^"']+from\s+)?["']([^"']+)["']""")
@@ -200,12 +246,17 @@ def _compile_index_subset(
     healed_links: List[Dict[str, str]],
     code_dependency_edges: List[Dict[str, str]],
 ) -> Dict[str, Any]:
+    domain_layers = load_domain_layers(project_root)
     entries: List[Dict[str, Any]] = []
-    by_domain: Dict[str, List[Dict[str, Any]]] = {k: [] for k in DOMAIN_LAYERS}
+    by_domain: Dict[str, List[Dict[str, Any]]] = {k: [] for k in domain_layers}
     edges: List[Dict[str, str]] = []
     subset_fm: Dict[str, Dict[str, Any]] = {}
     body_by_id: Dict[str, str] = {}
     path_by_id: Dict[str, str] = {}
+
+    subset_key_to_id: Dict[str, str] = {}
+    subset_id_to_key: Dict[str, str] = {}
+    raw_parsed_nodes: List[Dict[str, Any]] = []
 
     for md_path in subset_files:
         rel_path = str(md_path.relative_to(project_root))
@@ -215,18 +266,92 @@ def _compile_index_subset(
             print(f"⚠️ Skipping unparseable file {rel_path}: {exc}", file=sys.stderr)
             continue
 
-        idx = fm.get("context_index", {})
-        topo = fm.get("topology", {})
+        idx = fm.get("context_index", {}) if isinstance(fm.get("context_index"), dict) else {}
+        topo = fm.get("topology", {}) if isinstance(fm.get("topology"), dict) else {}
         domain = idx.get("domain_code", "000")
+        src_id = fm.get("node_id", rel_path)
+        node_key = idx.get("node_key")
+
+        if src_id:
+            if node_key:
+                subset_key_to_id[node_key] = src_id
+                subset_id_to_key[src_id] = node_key
+
+        raw_parsed_nodes.append({
+            "md_path": md_path,
+            "rel_path": rel_path,
+            "fm": fm,
+            "body": body,
+            "domain": domain,
+            "src_id": src_id,
+            "node_key": node_key,
+            "idx": idx,
+            "topo": topo,
+        })
+
+    outbound_by_node: Dict[str, List[str]] = {}
+    backlinks_map: Dict[str, List[str]] = {}
+
+    for node in raw_parsed_nodes:
+        src_id = node["src_id"]
+        src_key = node["node_key"]
+        canonical_src = src_key if src_key else src_id
+        extracted_tokens = extract_wikilinks_outside_fenced_blocks(node["body"])
+
+        resolved_outbound: List[str] = []
+        for token in extracted_tokens:
+            if token in subset_key_to_id:
+                resolved_outbound.append(token)
+                target_key = token
+                target_id = subset_key_to_id[token]
+            elif token in subset_id_to_key:
+                target_key = subset_id_to_key[token]
+                target_id = token
+                resolved_outbound.append(target_key)
+            else:
+                continue
+
+            backlinks_map.setdefault(target_key, []).append(canonical_src)
+            backlinks_map.setdefault(target_id, []).append(canonical_src)
+
+        outbound_by_node[src_id] = sorted(list(set(resolved_outbound)))
+
+    for node in raw_parsed_nodes:
+        md_path = node["md_path"]
+        rel_path = node["rel_path"]
+        fm = node["fm"]
+        body = node["body"]
+        domain = node["domain"]
+        src_id = node["src_id"]
+        node_key = node["node_key"]
+        idx = node["idx"]
+        topo = node["topo"]
+
+        artifact_type = fm.get("artifact_type", "wiki")
+        inferred_track = "official" if artifact_type in OFFICIAL_TYPES else "wiki"
+        artifact_track = fm.get("artifact_track") or idx.get("artifact_track") or topo.get("artifact_track") or inferred_track
+
+        subdomain = fm.get("subdomain") or idx.get("subdomain") or topo.get("subdomain")
+        if not subdomain and domain and domain not in ("000", "100", "200", "300", "400", "500", "600", "700", "800", "900"):
+            subdomain = domain
+
+        outbound_links = outbound_by_node.get(src_id, [])
+        node_backlinks = sorted(list(set(
+            backlinks_map.get(src_id, []) + (backlinks_map.get(node_key, []) if node_key else [])
+        )))
 
         entry = {
             "node_id": fm.get("node_id"),
-            "artifact_type": fm.get("artifact_type"),
+            "artifact_type": artifact_type,
             "status": fm.get("status"),
             "access_tier": fm.get("access_tier"),
             "priority": fm.get("priority"),
             "domain_code": domain,
-            "node_key": idx.get("node_key"),
+            "subdomain": subdomain,
+            "artifact_track": artifact_track,
+            "outbound_links": outbound_links,
+            "backlinks": node_backlinks,
+            "node_key": node_key,
             "facet_tags": idx.get("facet_tags", []),
             "keywords": idx.get("keywords", []),
             "summary_1line": idx.get("summary_1line", ""),
@@ -240,7 +365,6 @@ def _compile_index_subset(
         entries.append(entry)
         by_domain.setdefault(domain, []).append(entry)
 
-        src_id = fm.get("node_id", rel_path)
         subset_fm[src_id] = fm
         body_by_id[src_id] = body
         path_by_id[src_id] = rel_path
@@ -288,6 +412,11 @@ def _compile_index_subset(
                 }
             )
 
+    domain_stats = {
+        code: len(by_domain.get(code, []))
+        for code in domain_layers
+    }
+
     return {
         "schema_version": "2.2.0",
         "project": project_root.name,
@@ -296,13 +425,14 @@ def _compile_index_subset(
         "total_nodes": len(entries),
         "healed_links": healed_links,
         "pending_topology_alignments": pending_topology_alignments,
+        "domain_stats": domain_stats,
         "domain_registry": {
             code: {
                 "title": title,
                 "count": len(by_domain.get(code, [])),
                 "items": by_domain.get(code, []),
             }
-            for code, title in DOMAIN_LAYERS.items()
+            for code, title in domain_layers.items()
         },
         "causal_topology_edges": edges,
         "code_dependency_edges": code_dependency_edges,
@@ -318,7 +448,7 @@ def build_public_and_private_indices(project_root: Path) -> tuple[Dict[str, Any]
     memory_dir = project_root / "memory"
     md_files = sorted(
         p for p in memory_dir.rglob("*.md")
-        if p.name != "CONTEXT_MAP.md"
+        if p.name not in ("CONTEXT_MAP.md", "LEDGER.md")
     )
 
     healed_links = heal_dead_links(project_root, md_files)
@@ -436,10 +566,21 @@ def main() -> int:
     index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     private_index_path = project_root / "memory" / "index" / "PRIVATE_INDEX.json"
+    private_map_path = project_root / "memory" / "private" / "CONTEXT_MAP.md"
     if private_index.get("total_nodes", 0) > 0:
         private_index_path.write_text(json.dumps(private_index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    elif private_index_path.exists():
-        private_index_path.unlink()
+        private_map_path.parent.mkdir(parents=True, exist_ok=True)
+        private_map_md = render_context_map_md(project_root, private_index).replace(
+            "# 🗺️ PotoTypeV0 × Friday Context Registry & Topology Map (CONTEXT_MAP.md)",
+            "# 🔒 PotoTypeV0 × Friday Private Context Registry & Topology Map (memory/private/CONTEXT_MAP.md)",
+            1,
+        )
+        private_map_path.write_text(private_map_md, encoding="utf-8")
+    else:
+        if private_index_path.exists():
+            private_index_path.unlink()
+        if private_map_path.exists():
+            private_map_path.unlink()
 
     map_path = project_root / "memory" / "codex" / "CONTEXT_MAP.md"
     map_path.parent.mkdir(parents=True, exist_ok=True)
@@ -451,6 +592,7 @@ def main() -> int:
     print(f"✅ Compiled CONTEXT_INDEX.json ({index['total_nodes']} public nodes, {len(index.get('code_dependency_edges', []))} code edges) -> {index_path}")
     if private_index.get("total_nodes", 0) > 0:
         print(f"🔒 Compiled PRIVATE_INDEX.json ({private_index['total_nodes']} private nodes, git-ignored) -> {private_index_path}")
+        print(f"🔒 Rendered Private CONTEXT_MAP.md -> {private_map_path}")
     print(f"✅ Rendered CONTEXT_MAP.md -> {map_path}")
     return 0
 

@@ -16,6 +16,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+export const CATALOG_STAGE2_THRESHOLD = 25;
+
 export function buildProgressiveContextSummary(cwd: string): string | null {
 	const indexPath = path.join(cwd, "memory", "index", "CONTEXT_INDEX.json");
 	const privateIndexPath = path.join(cwd, "memory", "index", "PRIVATE_INDEX.json");
@@ -26,6 +28,7 @@ export function buildProgressiveContextSummary(cwd: string): string | null {
 		const privateRaw = fs.existsSync(privateIndexPath) ? JSON.parse(fs.readFileSync(privateIndexPath, "utf-8")) : null;
 		const registry = raw.domain_registry ?? {};
 		const itemLines: string[] = [];
+		const pinnedLines: string[] = [];
 		let activeCount = 0;
 		let isolatedCount = 0;
 
@@ -41,9 +44,11 @@ export function buildProgressiveContextSummary(cwd: string): string | null {
 					}
 					activeCount++;
 					const tag = isPrivate ? "🔒PRIVATE | " : "";
-					itemLines.push(
-						`- [${tag}${code} | ${item.node_key} | ${item.node_id} (${item.artifact_type}/${item.status})] ${item.summary_1line} -> \`${item.path}\``,
-					);
+					const line = `- [${tag}${code} | ${item.node_key} | ${item.node_id} (${item.artifact_type}/${item.status})] ${item.summary_1line} -> \`${item.path}\``;
+					itemLines.push(line);
+					if (code === "000" || code === "100" || item.always_pin) {
+						pinnedLines.push(line);
+					}
 				}
 			}
 		};
@@ -51,6 +56,24 @@ export function buildProgressiveContextSummary(cwd: string): string | null {
 		collectRegistry(registry, false);
 		if (privateRaw?.domain_registry) {
 			collectRegistry(privateRaw.domain_registry, true);
+		}
+
+		if (activeCount > CATALOG_STAGE2_THRESHOLD) {
+			// Stage 1 Compact Summary: <= 20 lines
+			const stats = raw.domain_stats ?? {};
+			const statsSummary = Object.entries(stats)
+				.filter(([_, c]) => (c as number) > 0)
+				.map(([d, c]) => `${d}: ${c}`)
+				.join(" | ");
+			const summaryLines: string[] = [
+				"",
+				`## 🧩 [Friday Progressive Context Index] 專案圖書館分類摘要 (節點數: ${activeCount} > ${CATALOG_STAGE2_THRESHOLD})`,
+				`館藏統計：${statsSummary}`,
+				"提示：館藏條目已超過緊湊閾值，使用 `query_library(domain=..., query=...)` 可精準檢索條目與雙向圖譜。",
+				"### 核心憲法與護欄 (Pinned):",
+				...pinnedLines,
+			];
+			return summaryLines.slice(0, 20).join("\n");
 		}
 
 		const lines: string[] = [
@@ -142,7 +165,117 @@ export function clearSessionPinnedContextSummaries(): void {
 	sessionPinnedSummaries.clear();
 }
 
+export interface FridayEpistemicBridge {
+	getVerifiedIndexSnapshot(cwd: string): any;
+	getCatalogSummary(cwd: string): string | null;
+	queryLibrary(
+		cwd: string,
+		params: {
+			domain?: string;
+			query?: string;
+			node_key?: string;
+			include_neighbors?: boolean;
+			limit?: number;
+		},
+	): any[];
+	getSessionPinnedContextSummary(sessionKey: string, cwd: string, forceRefresh?: boolean): string | null;
+	clearSessionPinnedContextSummaries(): void;
+}
+
+export function queryLibraryNodes(
+	cwd: string,
+	params: {
+		domain?: string;
+		query?: string;
+		node_key?: string;
+		include_neighbors?: boolean;
+		limit?: number;
+	},
+): any[] {
+	const indexPath = path.join(cwd, "memory", "index", "CONTEXT_INDEX.json");
+	const privatePath = path.join(cwd, "memory", "index", "PRIVATE_INDEX.json");
+	const indexPaths = [indexPath, privatePath].filter((p) => fs.existsSync(p));
+	if (indexPaths.length === 0) return [];
+
+	let results: any[] = [];
+	for (const p of indexPaths) {
+		try {
+			const index = JSON.parse(fs.readFileSync(p, "utf-8"));
+			for (const sec of Object.values<any>(index.domain_registry ?? {})) {
+				for (const it of sec.items ?? []) {
+					if (params.domain && it.domain_code !== params.domain && it.subdomain !== params.domain) continue;
+					if (params.node_key && it.node_key !== params.node_key && it.node_id !== params.node_key) continue;
+					if (params.query) {
+						const q = params.query.toLowerCase();
+						const matched =
+							(it.node_key ?? "").toLowerCase().includes(q) ||
+							(it.node_id ?? "").toLowerCase().includes(q) ||
+							(it.summary_1line ?? "").toLowerCase().includes(q) ||
+							(it.path ?? "").toLowerCase().includes(q) ||
+							(Array.isArray(it.keywords) && it.keywords.some((k: string) => k.toLowerCase().includes(q)));
+						if (!matched) continue;
+					}
+					results.push(it);
+				}
+			}
+		} catch {
+			// ignore parse errors
+		}
+	}
+
+	if (params.limit && params.limit > 0) {
+		results = results.slice(0, params.limit);
+	}
+	return results;
+}
+
+export const fridayEpistemicBridge: FridayEpistemicBridge = {
+	getVerifiedIndexSnapshot: (cwd: string) => {
+		const p = path.join(cwd, "memory", "index", "CONTEXT_INDEX.json");
+		return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, "utf-8")) : null;
+	},
+	getCatalogSummary: (cwd: string) => buildProgressiveContextSummary(cwd),
+	queryLibrary: (cwd: string, params) => queryLibraryNodes(cwd, params),
+	getSessionPinnedContextSummary,
+	clearSessionPinnedContextSummaries,
+};
+
+(globalThis as any).__fridayEpistemicBridge = fridayEpistemicBridge;
+
 export default function (pi: ExtensionAPI) {
+	(globalThis as any).__fridayEpistemicBridge = fridayEpistemicBridge;
+
+	pi.registerTool({
+		name: "query_library",
+		description: "Query Friday Library Context Index and bidirectional wiki graph.",
+		parameters: {
+			type: "object",
+			properties: {
+				domain: { type: "string", description: "3-digit domain classification code" },
+				query: { type: "string", description: "Keyword search in node_key, summary, and keywords" },
+				node_key: { type: "string", description: "Exact node key lookup" },
+				include_neighbors: { type: "boolean", description: "Whether to return outbound_links and backlinks" },
+				limit: { type: "number", description: "Max results to return" },
+			},
+		},
+		execute: async (args: any, ctx: any) => {
+			return fridayEpistemicBridge.queryLibrary(ctx.cwd, args ?? {});
+		},
+	});
+
+	pi.registerCommand("dream", {
+		description: "Consolidate scratch drafts into memory/wiki/ and rebuild knowledge graph",
+		handler: async (_args: string, ctx: any) => {
+			const dreamPromptPath = path.join(ctx.cwd, ".Friday", "prompts", "dream.md");
+			let promptText = "";
+			if (fs.existsSync(dreamPromptPath)) {
+				promptText = fs.readFileSync(dreamPromptPath, "utf-8");
+			}
+			return {
+				output: `[Friday /dream Pipeline Activated]\nPrompt: ${dreamPromptPath}\n${promptText ? `\n${promptText}` : ""}`,
+			};
+		},
+	});
 	pi.on("session_start", async (_event, ctx) => {
 		const sessionKey = `${ctx.sessionManager?.getSessionId?.() ?? "default"}::${ctx.cwd}`;
 		getSessionPinnedContextSummary(sessionKey, ctx.cwd, true);

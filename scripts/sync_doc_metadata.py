@@ -271,6 +271,19 @@ def sync_governed_markdown(
             except KeyError:
                 pass
 
+    # If content_checksum is present in frontmatter, update it
+    checksum_changed = False
+    if "content_checksum" in fm:
+        import hashlib
+        body_for_hash = new_body.lstrip("\r\n") if new_body.startswith("\r\n") else (new_body.lstrip("\n") if new_body.startswith("\n") else new_body)
+        new_chk = hashlib.sha256(body_for_hash.encode("utf-8")).hexdigest()[:16]
+        if fm.get("content_checksum") != new_chk:
+            try:
+                new_raw_fm = surgical_set_scalar(new_raw_fm, "content_checksum", f'"{new_chk}"')
+                checksum_changed = True
+            except KeyError:
+                pass
+
     date_changed = False
     if str(fm.get("created_at", "")) > today_str:
         try:
@@ -279,7 +292,7 @@ def sync_governed_markdown(
         except KeyError:
             pass
 
-    if counts_changed or result["ssot_table_updated"] or date_changed or str(fm.get("updated_at", "")) != today_str:
+    if counts_changed or checksum_changed or result["ssot_table_updated"] or date_changed or str(fm.get("updated_at", "")) != today_str:
         try:
             new_raw_fm = surgical_set_scalar(new_raw_fm, "updated_at", today_str)
         except KeyError:
@@ -356,14 +369,184 @@ def sync_governed_markdown(
     return result
 
 
+NODE_ID_RE = re.compile(r"MEM-(\d{4})-(\d{4})")
+WIKILINK_RE = re.compile(r"\[\[([A-Za-z0-9_.-]+)(?:\|[^\]]+)?\]\]")
+
+
+def allocate_next_node_id(memory_root: Path, year: int = 2026) -> str:
+    """
+    Scans memory/ for all MEM-YYYY-XXXX node IDs.
+    Filters out test sentinel IDs (>= 0099).
+    Returns the next sequential MEM-YYYY-XXXX.
+    """
+    max_id = 0
+    if memory_root.exists():
+        for f in memory_root.glob("**/*"):
+            if f.is_file() and f.suffix in (".md", ".json"):
+                # Skip test sentinel files
+                if "SENTINEL-X" in f.name or "900_SENTINEL" in f.name or "910_SENTINEL" in f.name:
+                    continue
+                try:
+                    text = f.read_text(encoding="utf-8", errors="ignore")
+                    for m in NODE_ID_RE.finditer(text):
+                        y, seq_str = int(m.group(1)), int(m.group(2))
+                        if y == year and seq_str < 99:
+                            if seq_str > max_id:
+                                max_id = seq_str
+                except Exception:
+                    continue
+    next_id = max_id + 1
+    return f"MEM-{year}-{next_id:04d}"
+
+
+def init_governed_markdown(
+    md_path: Path,
+    project_root: Path,
+    artifact_type: str = "wiki",
+    domain_code: str | None = None,
+    node_key: str | None = None,
+    title: str | None = None,
+) -> None:
+    if not md_path.exists():
+        md_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_body = f"# {title or md_path.stem}\n\n- [FACT] 初始條目建立。"
+    else:
+        raw_body = md_path.read_text(encoding="utf-8")
+
+    # If frontmatter already exists, skip frontmatter initialization
+    if raw_body.startswith("---\n"):
+        return
+
+    # Auto-detect domain_code if not specified
+    if not domain_code:
+        prefix_match = re.match(r"^(\d{3})_", md_path.name)
+        if prefix_match:
+            domain_code = prefix_match.group(1)
+        else:
+            domain_code = "310" if artifact_type in sv.WIKI_TYPES else "300"
+
+    today_str = datetime.date.today().isoformat()
+    node_id = allocate_next_node_id(project_root / "memory")
+    slug = md_path.stem.upper().replace(" ", "_").replace("-", "_")
+    if not node_key:
+        node_key = f"{domain_code}.{slug}.v1"
+    doc_title = title or md_path.stem.replace("_", " ").title()
+
+    # Extract any [[links]] from raw_body for outbound_links
+    outbound = []
+    for m in WIKILINK_RE.finditer(raw_body):
+        ref = m.group(1).strip()
+        if ref and ref not in outbound:
+            outbound.append(ref)
+
+    import hashlib
+    body_for_hash = raw_body.lstrip("\r\n") if raw_body.startswith("\r\n") else (raw_body.lstrip("\n") if raw_body.startswith("\n") else raw_body)
+    content_checksum = hashlib.sha256(body_for_hash.encode("utf-8")).hexdigest()[:16]
+
+    actual_counts = compute_actual_epistemic_counts(raw_body)
+    is_official = artifact_type in sv.OFFICIAL_TYPES
+    access_tier = "restricted" if is_official else "standard"
+    priority = "high" if is_official else "normal"
+
+    track = "official" if is_official else "wiki"
+
+    rel_path_str = str(md_path.relative_to(project_root)) if md_path.is_relative_to(project_root) else str(md_path)
+
+    reviewer_field = """reviewer:
+  role: "challenger"
+  model: "claude-3-7-sonnet"
+  verdict: "APPROVED" """ if is_official else "reviewer: null"
+
+    oracle_field = f"""verification_oracle:
+  type: "schema_check"
+  command: "python3 schemas/schema_validator.py --file {rel_path_str} --run-oracle"
+  expected_exit_code: 0
+  falsifiable_criterion: "節點內容與標頭不合規或驗證器回傳非 0 結束碼" """ if is_official else "verification_oracle: null"
+
+    frontmatter = f"""---
+node_id: "{node_id}"
+artifact_type: "{artifact_type}"
+access_tier: "{access_tier}"
+priority: "{priority}"
+status: "verified"
+created_at: "{today_str}"
+updated_at: "{today_str}"
+author:
+  role: "knowledge_worker"
+  model: "flash"
+{reviewer_field}
+content_checksum: "{content_checksum}"
+epistemic_profile:
+  fact_count: {actual_counts['fact_count']}
+  inferred_count: {actual_counts['inferred_count']}
+  hypothesis_count: {actual_counts['hypothesis_count']}
+  unverified_count: {actual_counts['unverified_count']}
+epistemic_stats:
+  fact_count: {actual_counts['fact_count']}
+  inferred_count: {actual_counts['inferred_count']}
+  hypothesis_count: {actual_counts['hypothesis_count']}
+  unverified_count: {actual_counts['unverified_count']}
+{oracle_field}
+context_index:
+  domain_code: "{domain_code}"
+  node_key: "{node_key}"
+  artifact_track: "{track}"
+  facet_tags:
+    - "Library:Wiki:Document:{artifact_type}"
+  keywords:
+    - "{slug}"
+    - "wiki"
+  summary_1line: "{doc_title} documentation entry"
+topology:
+  depends_on: []
+  supersedes: []
+  conflicts_with: []
+  outbound_links: {json.dumps(outbound)}
+  backlinks: []
+  verified_by:
+    - "schemas/schema_validator.py"
+  affected_paths:
+    - "{rel_path_str}"
+---
+"""
+    md_path.write_text(frontmatter + "\n" + raw_body.lstrip(), encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Deterministic Hook Metadata & Topology Sync for Friday Memory Nodes.")
     parser.add_argument("--project-root", default=".", help="Project root directory")
-    parser.add_argument("--file", required=True, help="Target governed Markdown file to sync")
+    parser.add_argument("positional_file", nargs="?", default=None, help="Target file (positional)")
+    parser.add_argument("--file", default=None, help="Target governed Markdown file to sync")
+    parser.add_argument("--init", nargs="?", const=True, default=False, help="Initialize a draft Markdown file with governed YAML frontmatter")
+    parser.add_argument("--type", default="wiki", help="Artifact type for initialization (default: wiki)")
+    parser.add_argument("--domain", default=None, help="Domain code for initialization (default: auto-detected or 310/300)")
+    parser.add_argument("--node-key", default=None, help="Node key for initialization")
+    parser.add_argument("--title", default=None, help="Document title for initialization")
     args = parser.parse_args()
 
     project_root = Path(args.project_root).resolve()
-    md_path = Path(args.file).resolve()
+    target_file = None
+    if isinstance(args.init, str) and args.init is not True:
+        target_file = args.init
+    elif args.file:
+        target_file = args.file
+    elif args.positional_file:
+        target_file = args.positional_file
+
+    if not target_file:
+        parser.error("Either --file <path>, positional <path>, or --init <path> must be specified.")
+
+    md_path = Path(target_file).resolve()
+    if args.init:
+        init_governed_markdown(
+            md_path,
+            project_root,
+            artifact_type=args.type,
+            domain_code=args.domain,
+            node_key=args.node_key,
+            title=args.title,
+        )
+
     res = sync_governed_markdown(md_path, project_root)
 
     rel = md_path.relative_to(project_root) if md_path.is_relative_to(project_root) else md_path

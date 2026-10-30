@@ -15,8 +15,9 @@
 
 ## 2. 三區記憶分流與核心架構機制 (3-Zone Memory & Core Pillars)
 
-1. **公私分離三區檔案治理 (3-Zone File Placement — Option A)**：
-   - **公開框架區 (`memory/codex/` & `memory/specs/`，編號 `000`–`699`)**：存放通用架構契約與公開規格，具備合規 YAML Frontmatter，自動編入 `memory/index/CONTEXT_INDEX.json` 與 `memory/codex/CONTEXT_MAP.md`。
+1. **公私分離與雙軌圖書館檔案治理 (Memory File Placement & Dual-Track Library)**：
+   - **公開框架公文區 (`memory/codex/` & `memory/specs/`，編號 `000`–`699`)**：存放通用架構契約與公開規格，具備合規 YAML Frontmatter，自動編入 `memory/index/CONTEXT_INDEX.json` 與 `memory/codex/CONTEXT_MAP.md`。
+   - **開架雙向圖書館區 (`memory/wiki/`，編號 `310`–`499` 等可插拔分類)**：存放 Wiki 知識節點、操作指南與 SOP，免除雙簽與 Oracle 剛性門檻，支援 `[[wikilink]]` 雙向圖譜，可透過 `query_library` 快速檢索。
    - **私有專案記憶區 (`memory/private/specs/`，編號 `900`–`999` 或專案私有分析)**：存放私有專案計畫與敏感分析，自動分流索引至 Git 忽略之 `memory/index/PRIVATE_INDEX.json`，嚴禁寫入公開 `memory/LEDGER.md` 或推送至公開 GitHub。
    - **自由暫存與實驗區 (`scratch/`)**：存放未定案草稿、臨時腳本與本地測試產物，受 `.gitignore` 忽略且免除 YAML Schema 驗證鎖；專案根目錄 (`./`) 僅允許 `README.md` 與 `AGENTS.md`，其餘子目錄（如 `src/`, `tests/`）開放正常開發讀寫。
 2. **漸進式揭露、活躍台帳與跨模型認知誠實**：
@@ -29,8 +30,9 @@
 
 ## 3. 專案目錄與內建專屬指令
 
-- **核心目錄**：`.Friday/`（大腦核心、技能書 `.Friday/skills/` 與角色 `.Friday/agents/*.md`）、`schemas/`（`schema_validator.py`）、`scripts/`（`auto_update_map.py` 與 `test_friday_architecture.py`）、`memory/`（公開 `codex/`、`specs/`、`decisions/`、`audits/` 與私有 `private/`）、`scratch/`（本地自由暫存區）。
-- **專屬指令**：
+- **核心目錄**：`.Friday/`（大腦核心、技能書 `.Friday/skills/` 與角色 `.Friday/agents/*.md`）、`schemas/`（`schema_validator.py`）、`scripts/`（`auto_update_map.py` 與 `test_friday_architecture.py`）、`memory/`（公開 `codex/`、`specs/`、`wiki/`、`decisions/`、`audits/` 與私有 `private/`）、`scratch/`（本地自由暫存區）。
+- **館藏檢索與專屬指令**：
+  - `query_library`：雙階段館藏檢索 In-Process 工具（支援 `domain`, `query`, `node_key`, `include_neighbors` 參數），檢索 Wiki 與公文節點摘要及雙向關聯鄰居。
   - `/mode`：管理角色模型 (`set`)、調度策略 (`strategy <apex-commander|hybrid-synergy>`)、憑證 (`key`/`vertex`) 與狀態 (`status`)。
   - `/context [turns|tools|json|pin-refresh]`：四維度 Context 結構解剖、省流投報率 (`Offload ROI`) 與 KV Cache 命中率儀表板。
   - `/guard [reset|validate]`：檢視工作區邊界、重設授權 (`reset`) 或執行全庫驗證與公私索引重編 (`validate`)。
