@@ -1154,6 +1154,10 @@ export default function (pi: ExtensionAPI) {
 		if (!promptText) return undefined;
 
 		const mandates: string[] = [];
+		const now = new Date();
+		const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+		mandates.push(`[Current Local Time (Tail Anchor): ${nowStr} | Temporal Reference Anchor for Search & Timestamps]`);
+
 		if (STRATEGY_MODE === "apex-commander") {
 			// D3: Silent Guardrails in apex-commander — Only inject a mandate when an image path is explicitly present
 			// (since read() on images is hard-blocked in apex-commander). Multi-file read quotas (max 3/turn) are enforced silently by tool_call.

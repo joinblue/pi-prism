@@ -1,6 +1,6 @@
 # 🗺️ PotoTypeV0 × Friday Context Registry & Topology Map (CONTEXT_MAP.md)
 
-> **自動生成時間**: `2026-10-30T13:17:50Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `14`
+> **自動生成時間**: `2026-10-31T07:38:18Z` | **Agentic Harness**: `Friday` | **記憶節點總數**: `16`
 > **漸進式揭露原則 (Progressive Disclosure)**: Agent 啟動時僅注入活躍節點 (`verified`/`draft`) 之單行摘要，按節點鍵值 (`node_key`) 或節點 ID (`node_id`) 按需調閱對應檔案。
 
 ## 1. 領域分層索引表 (Domain Layer Registry 000–900)
@@ -29,6 +29,7 @@
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
 | `300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1` | `MEM-2026-0015` | `spec` | `verified` | `google-vertex/gemini-4-argon` ➔ `nvidia/nemotron-3-ultra-550b-a55b` | 圖書館/公文 Schema 擴充與雙腦絲滑分派總藍圖：確立記憶圖書館與 Wiki 為核心主題、改造無感透明代讀 Router 並定義 AGY Teamwork 分層派工矩陣。 | [640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md](../specs/640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md) |
+| `320.EXTENSION-AND-SCHEMA-RECIPES.v1` | `MEM-2026-0018` | `wiki` | `verified` | `claude-opus-4-6-thinking` ➔ `None` | Stage 6 Extension Recipes, Schema Guardrails, Unified /dream, Nemotron Web Research, and Code Intelligence Map | [320_EXTENSION_AND_SCHEMA_RECIPES.md](../wiki/320_EXTENSION_AND_SCHEMA_RECIPES.md) |
 
 ### 🧩 `310` — 310 Library Wiki & Knowledge Graph Notes (知識庫 Wiki 與圖譜筆記)
 
@@ -58,6 +59,12 @@
 | 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
 | :--- | :--- | :---: | :---: | :--- | :--- | :--- |
 | `700.HARNESS-BLUEPRINT.v1` | `MEM-2026-0005` | `spec` | `verified` | `deepseek-ai/deepseek-v4.1-flash` ➔ `z-ai/glm-5.3` | Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。 | [700_HARNESS_BLUEPRINT.md](../specs/700_HARNESS_BLUEPRINT.md) |
+
+### 🧩 `900` — 900 Audits, Postmortems & Historical Ledgers (審計、事後檢討與歷史帳本)
+
+| 定位鍵 (`node_key`) | 節點 ID (`node_id`) | 類型 | 狀態 | 產出模型 ➔ 審查模型 | 單行摘要 (`summary_1line`) | 路徑 |
+| :--- | :--- | :---: | :---: | :--- | :--- | :--- |
+| `900.SESSION_DIGEST.v1` | `MEM-2026-0019` | `digest` | `verified` | `flash` ➔ `None` | Episodic Session Digest Log documentation entry | [SESSION_DIGEST.md](../episodic/SESSION_DIGEST.md) |
 
 ## 2. 記憶節點依賴拓撲圖 (Context Dependency DAG)
 
@@ -103,6 +110,9 @@ flowchart TD
     MEM_2026_0005["MEM-2026-0005"] -->|"depends_on"| MEM_2026_0003["MEM-2026-0003"]
     MEM_2026_0016["MEM-2026-0016"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
     MEM_2026_0016["MEM-2026-0016"] -->|"depends_on"| MEM_2026_0015["MEM-2026-0015"]
+    MEM_2026_0018["MEM-2026-0018"] -->|"depends_on"| MEM_2026_0001["MEM-2026-0001"]
+    MEM_2026_0018["MEM-2026-0018"] -->|"depends_on"| MEM_2026_0016["MEM-2026-0016"]
+    MEM_2026_0018["MEM-2026-0018"] -->|"depends_on"| MEM_2026_0015["MEM-2026-0015"]
     MEM_2026_0010["MEM-2026-0010"] -->|"supersedes"| MEM_2026_0009["MEM-2026-0009"]
 ```
 
@@ -125,6 +135,21 @@ flowchart TD
 | `.Friday/extensions/subagent/index.ts` | `@earendil-works/pi-tui` | `ts_sdk_import` |
 | `.Friday/extensions/subagent/index.ts` | `.Friday/extensions/subagent/agents.ts` | `ts_local_import` |
 | `.Friday/extensions/workspace-guard.ts` | `@earendil-works/pi-coding-agent` | `ts_sdk_import` |
+
+### 3.2 源碼符號、Hook 註冊與規格影響圈總表 (Code Intelligence & Impact Map)
+
+| 源碼路徑 (`file_path`) | 主要符號與行號 (`symbols`) | Pi 擴充註冊 (`command`/`tool`/`hook`) | 影響圈 (`imported_by`) | 綁定規格 (`governing_specs`) |
+| :--- | :--- | :--- | :--- | :--- |
+| `.Friday/extensions/epistemic-gate.ts` | `CATALOG_STAGE2_THRESHOLD`(L19-L19), `buildProgressiveContextSummary`(L21-L21), `findAffectedMemoryNodes`(L108-L108), `getSessionPinnedContextSummary`(L153-L153), `clearSessionPinnedContextSummaries`(L164-L164), `FridayEpistemicBridge`(L168-L168) | `tool:query_library`(L318), `hook:session_shutdown`(L340), `hook:session_start`(L392), `hook:before_agent_start`(L397), `hook:tool_result`(L412) | — | `200.OPT-ROADMAP.v1`, `500.ROUTER-V2-MULTITURN.v1`, `500.HARNESS-DETAX.v1`, `300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1`, `700.HARNESS-BLUEPRINT.v1`, `320.EXTENSION-AND-SCHEMA-RECIPES.v1` |
+| `.Friday/extensions/model-router.ts` | `FridayEpistemicBridge`(L33-L33), `DEFAULT_ROLE_MODELS`(L80-L80), `RoleName`(L90-L90), `SpecialistRole`(L91-L91), `StrategyMode`(L92-L92), `ROLE_FALLBACK_CHAINS`(L95-L95) | `hook:session_start`(L1069), `hook:session_shutdown`(L1074), `hook:turn_start`(L1146), `hook:before_agent_start`(L1150), `hook:tool_call`(L1270), `tool:dispatch_specialist`(L1394) | — | `600.AUDIT-002.v1`, `200.OPT-ROADMAP.v1`, `500.MODEL-APIKEY-SPEC.v1`, `510.MODEL-POOL-PLANNING.v1`, `500.ROUTER-V2-MULTITURN.v1`, `500.PULSE-SCHEDULER.v1`, `500.HARNESS-DETAX.v1`, `300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1`, `700.HARNESS-BLUEPRINT.v1` |
+| `.Friday/extensions/subagent/agents.ts` | `AgentScope`(L9-L9), `AgentConfig`(L11-L11), `AgentDiscoveryResult`(L21-L21), `discoverAgents`(L128-L128), `formatAgentList`(L149-L149) | — | `.Friday/extensions/subagent/index.ts` | — |
+| `.Friday/extensions/subagent/index.ts` | — | `tool:subagent`(L549) | — | `500.ROUTER-V2-MULTITURN.v1`, `300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1`, `700.HARNESS-BLUEPRINT.v1` |
+| `.Friday/extensions/web-research.ts` | `OutboundCheckResult`(L5-L5), `WebPageSnippet`(L10-L10), `NemotronGuardVerdict`(L17-L17), `IPI_DETERMINISTIC_RE`(L32-L32), `validateOutboundSafety`(L35-L35), `loadNvidiaApiKeys`(L74-L74) | `tool:web_research`(L513) | — | `320.EXTENSION-AND-SCHEMA-RECIPES.v1` |
+| `.Friday/extensions/workspace-guard.ts` | `formatRemediation`(L110-L110), `parseShellCommandQuoteAware`(L122-L122), `isReadOnlyBashCommand`(L248-L248), `checkPortabilityViolation`(L315-L315), `extractPathsFromBash`(L365-L365) | `hook:session_start`(L558), `hook:user_bash`(L564), `hook:tool_call`(L588), `command:/guard`(L724) | — | `200.OPT-ROADMAP.v1`, `500.PULSE-SCHEDULER.v1`, `500.HARNESS-DETAX.v1`, `300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1`, `700.HARNESS-BLUEPRINT.v1` |
+| `schemas/schema_validator.py` | `parse_markdown_frontmatter`(L71-L86), `count_prose_lines`(L89-L115), `check_as05_portability`(L118-L127), `load_all_memory_nodes`(L130-L144), `check_as06_node_exclusivity`(L147-L186), `detect_unlinked_topology_references`(L189-L235) | — | `scripts/auto_update_map.py`, `scripts/sync_doc_metadata.py`, `scripts/test_friday_architecture.py` | `600.AUDIT-001.v1`, `000.SOUL.v1`, `100.ARCH-RULES.v1`, `200.ADR-001.v1`, `200.OPT-ROADMAP.v1`, `510.MODEL-POOL-PLANNING.v1`, `500.ROUTER-V2-MULTITURN.v1`, `500.HARNESS-DETAX.v1`, `300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1`, `700.HARNESS-BLUEPRINT.v1` |
+| `scripts/auto_update_map.py` | `load_domain_layers`(L45-L61), `extract_wikilinks_outside_fenced_blocks`(L71-L83), `sha256_file`(L90-L91), `heal_dead_links`(L94-L162), `scan_code_dependencies`(L165-L233), `build_code_intelligence_map`(L244-L387) | — | `scripts/test_friday_architecture.py` | `600.AUDIT-001.v1`, `100.ARCH-RULES.v1`, `200.OPT-ROADMAP.v1`, `500.HARNESS-DETAX.v1`, `300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1`, `700.HARNESS-BLUEPRINT.v1`, `320.EXTENSION-AND-SCHEMA-RECIPES.v1` |
+| `scripts/sync_doc_metadata.py` | `split_frontmatter_raw`(L52-L59), `surgical_set_scalar`(L62-L88), `surgical_remove_from_yaml_list`(L91-L151), `render_role_models_ssot_block`(L154-L180), `compute_actual_epistemic_counts`(L183-L188), `load_all_node_paths`(L191-L214) | — | `scripts/test_friday_architecture.py` | `200.OPT-ROADMAP.v1`, `500.MODEL-APIKEY-SPEC.v1`, `510.MODEL-POOL-PLANNING.v1`, `500.ROUTER-V2-MULTITURN.v1`, `300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1`, `700.HARNESS-BLUEPRINT.v1` |
+| `scripts/test_friday_architecture.py` | `build_env`(L27-L32), `test_1_schema_and_context_index`(L35-L87), `test_2_anti_sycophancy_trap`(L90-L156), `test_3_workspace_boundary_guard`(L159-L217), `test_4_virtual_router_and_progressive_disclosure`(L220-L290), `test_5_multi_agent_profiles`(L293-L348) | — | — | `600.AUDIT-002.v1`, `500.ROUTER-V2-MULTITURN.v1`, `320.EXTENSION-AND-SCHEMA-RECIPES.v1` |
 
 ## 4. 專案治理目錄結構摘要
 

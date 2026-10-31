@@ -233,6 +233,160 @@ def scan_code_dependencies(project_root: Path) -> List[Dict[str, str]]:
     return code_edges
 
 
+TS_EXPORT_SYMBOL_RE = re.compile(
+    r"^\s*export\s+(?:default\s+)?(?:async\s+)?(function|class|const|interface|type)\s+([A-Za-z0-9_]+)"
+)
+TS_REGISTER_COMMAND_RE = re.compile(r"""pi\.registerCommand\(\s*["']([^"']+)["']""")
+TS_REGISTER_TOOL_RE = re.compile(r"""pi\.registerTool\(\s*\{[\s\S]*?name\s*:\s*["']([^"']+)["']""")
+TS_ON_HOOK_RE = re.compile(r"""pi\.on\(\s*["']([^"']+)["']""")
+
+
+def build_code_intelligence_map(
+    project_root: Path,
+    entries: List[Dict[str, Any]],
+    code_dependency_edges: List[Dict[str, str]],
+) -> Dict[str, Dict[str, Any]]:
+    """Build AST symbol coordinates, Pi hook/command/tool registrations, impact circles, and governing specs."""
+    intel_map: Dict[str, Dict[str, Any]] = {}
+
+    prompts_dir = project_root / ".Friday" / "prompts"
+    prompt_commands = {
+        p.stem for p in prompts_dir.glob("*.md")
+    } if prompts_dir.exists() else set()
+
+    py_files: List[Path] = []
+    for folder in ("schemas", "scripts"):
+        d = project_root / folder
+        if d.exists():
+            py_files.extend(sorted(d.glob("*.py")))
+
+    for py_file in py_files:
+        rel_path = str(py_file.relative_to(project_root))
+        symbols: List[Dict[str, Any]] = []
+        try:
+            source = py_file.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(py_file))
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    symbols.append({
+                        "name": node.name,
+                        "kind": "function",
+                        "line_start": getattr(node, "lineno", 1),
+                        "line_end": getattr(node, "end_lineno", getattr(node, "lineno", 1)),
+                    })
+                elif isinstance(node, ast.ClassDef):
+                    symbols.append({
+                        "name": node.name,
+                        "kind": "class",
+                        "line_start": getattr(node, "lineno", 1),
+                        "line_end": getattr(node, "end_lineno", getattr(node, "lineno", 1)),
+                    })
+        except Exception:
+            pass
+        intel_map[rel_path] = {
+            "file_path": rel_path,
+            "language": "python",
+            "symbols": symbols,
+            "pi_registrations": [],
+            "command_conflicts": [],
+            "imports": [],
+            "imported_by": [],
+            "governing_specs": [],
+        }
+
+    ext_dir = project_root / ".Friday" / "extensions"
+    if ext_dir.exists():
+        for ts_file in sorted(ext_dir.rglob("*.ts")):
+            rel_path = str(ts_file.relative_to(project_root))
+            symbols = []
+            pi_registrations: List[Dict[str, Any]] = []
+            command_conflicts: List[str] = []
+            try:
+                source = ts_file.read_text(encoding="utf-8")
+                lines = source.splitlines()
+                for idx, line in enumerate(lines, start=1):
+                    if line.lstrip().startswith("//"):
+                        continue
+                    m_sym = TS_EXPORT_SYMBOL_RE.match(line)
+                    if m_sym:
+                        symbols.append({
+                            "name": m_sym.group(2),
+                            "kind": m_sym.group(1),
+                            "line_start": idx,
+                            "line_end": idx,
+                        })
+                    for m_cmd in TS_REGISTER_COMMAND_RE.finditer(line):
+                        cmd_name = m_cmd.group(1)
+                        pi_registrations.append({
+                            "kind": "command",
+                            "name": f"/{cmd_name}",
+                            "line": idx,
+                        })
+                        if cmd_name in prompt_commands:
+                            command_conflicts.append(
+                                f"/{cmd_name} shadows .Friday/prompts/{cmd_name}.md (L{idx})"
+                            )
+                    for m_hook in TS_ON_HOOK_RE.finditer(line):
+                        pi_registrations.append({
+                            "kind": "hook",
+                            "name": m_hook.group(1),
+                            "line": idx,
+                        })
+                for m_tool in TS_REGISTER_TOOL_RE.finditer(source):
+                    tool_line = source[: m_tool.start()].count("\n") + 1
+                    pi_registrations.append({
+                        "kind": "tool",
+                        "name": m_tool.group(1),
+                        "line": tool_line,
+                    })
+            except Exception:
+                pass
+            intel_map[rel_path] = {
+                "file_path": rel_path,
+                "language": "typescript",
+                "symbols": symbols,
+                "pi_registrations": sorted(pi_registrations, key=lambda x: (x["line"], x["name"])),
+                "command_conflicts": command_conflicts,
+                "imports": [],
+                "imported_by": [],
+                "governing_specs": [],
+            }
+
+    for edge in code_dependency_edges:
+        src = edge.get("from", "")
+        dst = edge.get("to", "")
+        if src in intel_map and dst and dst not in intel_map[src]["imports"]:
+            intel_map[src]["imports"].append(dst)
+        if dst in intel_map and src and src not in intel_map[dst]["imported_by"]:
+            intel_map[dst]["imported_by"].append(src)
+
+    for entry in entries:
+        node_id = str(entry.get("node_id") or entry.get("id") or "")
+        node_key = str(entry.get("node_key") or "")
+        node_title = str(entry.get("summary_1line") or entry.get("title") or "")
+        node_path = str(entry.get("path") or entry.get("file_path") or "")
+        for aff in entry.get("affected_paths", []) or []:
+            aff_str = str(aff).strip()
+            if not aff_str:
+                continue
+            for code_path, info in intel_map.items():
+                if (
+                    code_path == aff_str
+                    or code_path.startswith(aff_str.rstrip("/") + "/")
+                    or aff_str.endswith(Path(code_path).name)
+                ):
+                    spec_ref = {
+                        "node_id": node_id,
+                        "node_key": node_key,
+                        "summary_1line": node_title,
+                        "path": node_path,
+                    }
+                    if spec_ref not in info["governing_specs"]:
+                        info["governing_specs"].append(spec_ref)
+
+    return intel_map
+
+
 def is_private_memory_path(project_root: Path, md_path: Path) -> bool:
     rel_parts = md_path.relative_to(project_root).parts
     return "private" in rel_parts
@@ -436,6 +590,11 @@ def _compile_index_subset(
         },
         "causal_topology_edges": edges,
         "code_dependency_edges": code_dependency_edges,
+        "code_intelligence_map": (
+            build_code_intelligence_map(project_root, entries, code_dependency_edges)
+            if code_dependency_edges
+            else {}
+        ),
     }
 
 
@@ -541,6 +700,27 @@ def render_context_map_md(project_root: Path, index: Dict[str, Any]) -> str:
     ])
     for cedge in index.get("code_dependency_edges", []):
         lines.append(f"| `{cedge['from']}` | `{cedge['to']}` | `{cedge['type']}` |")
+    intel_map = index.get("code_intelligence_map", {})
+    if intel_map:
+        lines.extend([
+            "",
+            "### 3.2 源碼符號、Hook 註冊與規格影響圈總表 (Code Intelligence & Impact Map)",
+            "",
+            "| 源碼路徑 (`file_path`) | 主要符號與行號 (`symbols`) | Pi 擴充註冊 (`command`/`tool`/`hook`) | 影響圈 (`imported_by`) | 綁定規格 (`governing_specs`) |",
+            "| :--- | :--- | :--- | :--- | :--- |",
+        ])
+        for cpath, info in sorted(intel_map.items()):
+            syms = ", ".join(
+                f"`{s['name']}`(L{s['line_start']}-L{s['line_end']})"
+                for s in info.get("symbols", [])[:6]
+            ) or "—"
+            regs = ", ".join(
+                f"`{r['kind']}:{r['name']}`(L{r['line']})"
+                for r in info.get("pi_registrations", [])[:6]
+            ) or "—"
+            imp_by = ", ".join(f"`{p}`" for p in info.get("imported_by", [])) or "—"
+            specs = ", ".join(f"`{g.get('node_key') or g.get('node_id')}`" for g in info.get("governing_specs", [])) or "—"
+            lines.append(f"| `{cpath}` | {syms} | {regs} | {imp_by} | {specs} |")
     lines.extend([
         "",
         "## 4. 專案治理目錄結構摘要",

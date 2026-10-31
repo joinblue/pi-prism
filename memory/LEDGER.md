@@ -5,7 +5,7 @@ access_tier: "standard"
 priority: "high"
 status: "verified"
 created_at: "2026-10-18"
-updated_at: "2026-10-30"
+updated_at: "2026-10-31"
 author:
   role: "architect"
   model: "google-vertex/gemini-4-argon"
@@ -71,7 +71,7 @@ topology:
 | **WO-2026-R1.1** | Router Stress-Test Hotfix (`S1`~`S4`)：剔除 404 下架模型、`filePaths` 負載上限、60s 逾時與擋死回報鐵律 | ✅ 已完成 (`f8a7b3e`) | `worker` / `auditor` | `memory/audits/MEM-2026-0009_ROUTER_STRESS_AUDIT.md` |
 | **WO-2026-S4** | Stage 4：`schema_validator.py` 散文預算、`AS-05`/`AS-06` 與骨架 | ✅ 已完成 | `worker` / `auditor` | `test_friday_architecture.py` (Suite 9) |
 | **WO-2026-S5** | Stage 5：`auto_update_map.py` 死鏈/AST + `epistemic-gate.ts` 警報 | ✅ 已完成 | `worker` / `auditor` | `test_friday_architecture.py` (Suite 10) |
-| **WO-2026-S6** | Stage 6：`/dream` 三階段睡眠記憶鞏固 + 退出微夢境 | ⏳ 待執行 | `architect` / `auditor` | Stage 6 Dream Pipeline E2E Tests |
+| **WO-2026-S6** | Stage 6：單一 `/dream` 記憶鞏固、`session_shutdown` 微夢境、`web_research` Nemotron Guard 防火牆與 `code_intelligence_map` 圖譜 | ✅ 已完成 | `architect` / `auditor` | `test_friday_architecture.py` (Suite 14) |
 | **WO-2026-P1** | Friday Pulse (`500.PULSE-SCHEDULER.v1`)：定時/事件/動態心跳三模態背景排程、免費 Scout 前哨過濾與 `/pulse` 收件匣 | 📝 藍圖草案 (`MEM-2026-0011`) | `architect` / `worker` | `memory/specs/620_FRIDAY_PULSE_SCHEDULER_SPEC.md` |
 | **WO-2026-D1** | Harness Detax (`500.HARNESS-DETAX.v1` / `MEM-2026-0014`)：公私索引分流 (`PRIVATE_INDEX.json`) 與 D1~D5 框架減稅正交重構（根目錄 `SEC-DOC-GOVERNANCE`、專家唯讀視野、沉默護欄、Prompt 精煉與按需處方籤） | ✅ 已完成 | `architect` / `worker` | `memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md` + `test_friday_architecture.py` |
 | **WO-2026-M1** | Library Wiki, Taxonomy & Seamless Router (`MEM-2026-0015`)：雙軌圖書館 (`memory/wiki/`)、`TAXONOMY.json`、`query_library` 與絲滑透明代讀 | ✅ 已完成 | `architect` / `worker` | `test_friday_architecture.py` (Suite 13) |

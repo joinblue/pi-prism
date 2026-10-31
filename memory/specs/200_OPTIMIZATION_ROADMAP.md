@@ -5,7 +5,7 @@ access_tier: "standard"
 priority: "critical"
 status: "verified"
 created_at: "2026-10-18"
-updated_at: "2026-10-29"
+updated_at: "2026-10-31"
 author:
   role: "architect"
   model: "deepseek-ai/deepseek-v4.1-flash"
@@ -81,7 +81,7 @@ topology:
 | **優化 6** | **唯一活躍台帳 `LEDGER.md` & 通用技能書** | 🟡 台帳已建 | 1. 建立動態狀態檔 `memory/LEDGER.md`（嚴格限制上限 $\le 80$ 行，只留活躍工單，完工即歸檔）<br>2. 建立 `.Friday/skills/` 通用軟體工程技能書（如根因除錯、架構重構標準流程） | `memory/LEDGER.md`<br>`.Friday/skills/` | **Stage 2**<br>**Stage 6** |
 | **自動化 A** | **極速反應修復 + 固定主腦調派專家 + Prefix KV Cache 物理防護與 `/context` 儀表板** | ✅ 已完成 | 1. 移除慢速塞車模型，改用實測 `< 1s TTFT` 模型池，並將 `NVCF-POLL-SECONDS` 降至 `"30"`、預設 `thinkingLevel: "low"`<br>2. **固定主腦（Orchestrator）**負責任務解析，搭配確定性專家調派（不靠主腦每回合自我換腦，消除 KV Cache 失效與關鍵字誤判）<br>3. **Prefix KV Cache 四大防護**：尾端隱形訊息注入 `[MANDATE]`、非侵入式專家 `apiKey` 傳遞、Session 級 `CONTEXT_INDEX` 釘選、多輪頂層 `AgentToolResult.usage` 匯總與 `/context` 鑑識儀表板 | `.Friday/models.json`<br>`.Friday/settings.json`<br>`.Friday/extensions/model-router.ts`<br>`.Friday/extensions/epistemic-gate.ts`<br>`.Friday/extensions/subagent/index.ts` | **Stage 1** |
 | **自動化 B** | **全自動 `.md` 同步、驗證、過時隔離與源碼連動警報 Hook** | ✅ 已完成 | 1. **Active-Only 注入過濾**：`epistemic-gate.ts` 自動過濾 `archived`/`deprecated` 舊節點，防止載入過時資訊<br>2. **Two-Phase Commit `.md` 自動同步 (`sync_doc_metadata.py`) + 驗證與重編 Hook**：修改 `memory/` 自動原地重算標籤計數、同步 SSOT 模型表、自動將 `supersedes` 舊節點降級為 `deprecated`，再執行 `schema_validator.py` 與 `auto_update_map.py`<br>3. **`affected_paths` 源碼變更連動警報（Code-to-Spec Drift Alert）**：修改受保護源碼時，自動提醒同步檢視對應 `spec` 藍圖節點 | `.Friday/extensions/epistemic-gate.ts`<br>`scripts/sync_doc_metadata.py` | **Stage 5** |
-| **自動化 C** | **`/dream` 夢境記憶整理機制** | 🔴 **完全沒有 (0%)** | 1. **手動 `/dream [deep]`**：三階段睡眠記憶鞏固（NREM `scout` 篩選 Session 軌跡 ➔ REM `architect` 更新 `memory/LEDGER.md` 與提純至 `200_DECISIONS.md` ➔ `schema_validator.py` + `auto_update_map.py` 神諭驗收）<br>2. **退出微夢境 (`session_shutdown` Hook)**：離開 `pi` 時毫秒級刷新索引並寫入 3 行摘要至 `memory/episodic/SESSION_DIGEST.md` | `.Friday/extensions/epistemic-gate.ts`<br>`.Friday/prompts/dream.md`<br>`memory/episodic/SESSION_DIGEST.md` | **Stage 6** |
+| **自動化 C** | **`/dream` 夢境記憶整理機制与 `web_research` 安全檢索** | ✅ 已完成 | 1. **手動 `/dream`**：統一由 `.Friday/prompts/dream.md` 驅動三階段睡眠記憶鞏固（NREM `scout` 編目 ➔ REM `architect` 雙向圖譜縫合、`code_intelligence_map` 重建與 `memory/LEDGER.md` 修剪 ➔ `schema_validator.py --run-oracle` 驗收）<br>2. **退出微夢境 (`session_shutdown` Hook)**：離開 `pi` 時自動以合規 Digest 標頭寫入 `memory/episodic/SESSION_DIGEST.md` 並刷新索引<br>3. **`web_research` 內建 Nemotron Guard 防火牆**：整合 Jina Reader + Python 備援與 `nvidia/llama-3.1-nemotron-safety-guard-8b-v3` 防間接提示注入 | `.Friday/extensions/epistemic-gate.ts`<br>`.Friday/extensions/web-research.ts`<br>`.Friday/prompts/dream.md`<br>`memory/episodic/SESSION_DIGEST.md` | **Stage 6** |
 
 ---
 

@@ -2,15 +2,15 @@
   "schema_version": "2.2.0",
   "project": "PotoTypeV0",
   "harness": "Friday",
-  "generated_at": "2026-10-30T13:17:50Z",
-  "total_nodes": 14,
+  "generated_at": "2026-10-31T07:38:18Z",
+  "total_nodes": 16,
   "healed_links": [],
   "pending_topology_alignments": [],
   "domain_stats": {
     "000": 1,
     "100": 1,
     "200": 2,
-    "300": 1,
+    "300": 2,
     "310": 1,
     "320": 0,
     "330": 0,
@@ -20,7 +20,7 @@
     "600": 2,
     "700": 1,
     "800": 0,
-    "900": 0
+    "900": 1
   },
   "domain_registry": {
     "000": {
@@ -39,7 +39,8 @@
           "outbound_links": [],
           "backlinks": [
             "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
-            "310.WIKI-GRAPH-GUIDE.v1"
+            "310.WIKI-GRAPH-GUIDE.v1",
+            "320.EXTENSION-AND-SCHEMA-RECIPES.v1"
           ],
           "node_key": "000.SOUL.v1",
           "facet_tags": [
@@ -172,7 +173,7 @@
           ],
           "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
           "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md",
-          "sha256_16": "fdfafb4ca7f26606",
+          "sha256_16": "97b5cb24d6ee8232",
           "author_model": "deepseek-ai/deepseek-v4.1-flash",
           "reviewer_model": "z-ai/glm-5.3",
           "depends_on": [
@@ -198,7 +199,7 @@
     },
     "300": {
       "title": "300 Core Domain Logic & Modules (核心領域邏輯與模組)",
-      "count": 1,
+      "count": 2,
       "items": [
         {
           "node_id": "MEM-2026-0015",
@@ -213,7 +214,8 @@
             "000.SOUL.v1"
           ],
           "backlinks": [
-            "310.WIKI-GRAPH-GUIDE.v1"
+            "310.WIKI-GRAPH-GUIDE.v1",
+            "320.EXTENSION-AND-SCHEMA-RECIPES.v1"
           ],
           "node_key": "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
           "facet_tags": [
@@ -252,6 +254,52 @@
             "scripts/auto_update_map.py",
             "scripts/sync_doc_metadata.py"
           ]
+        },
+        {
+          "node_id": "MEM-2026-0018",
+          "artifact_type": "wiki",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "high",
+          "domain_code": "300",
+          "subdomain": "320",
+          "artifact_track": "wiki",
+          "outbound_links": [
+            "000.SOUL.v1",
+            "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
+            "310.WIKI-GRAPH-GUIDE.v1"
+          ],
+          "backlinks": [],
+          "node_key": "320.EXTENSION-AND-SCHEMA-RECIPES.v1",
+          "facet_tags": [
+            "Library:Wiki:Recipes:extension",
+            "Security:WebResearch:NemotronGuard:Firewall"
+          ],
+          "keywords": [
+            "extension",
+            "schema",
+            "dream",
+            "web_research",
+            "nemotron",
+            "code_intelligence_map"
+          ],
+          "summary_1line": "Stage 6 Extension Recipes, Schema Guardrails, Unified /dream, Nemotron Web Research, and Code Intelligence Map",
+          "path": "memory/wiki/320_EXTENSION_AND_SCHEMA_RECIPES.md",
+          "sha256_16": "fa503a682ef3dff9",
+          "author_model": "claude-opus-4-6-thinking",
+          "reviewer_model": null,
+          "depends_on": [
+            "000.SOUL.v1",
+            "310.WIKI-GRAPH-GUIDE.v1",
+            "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1"
+          ],
+          "affected_paths": [
+            ".Friday/extensions/epistemic-gate.ts",
+            ".Friday/extensions/web-research.ts",
+            ".Friday/prompts/dream.md",
+            "scripts/auto_update_map.py",
+            "scripts/test_friday_architecture.py"
+          ]
         }
       ]
     },
@@ -272,7 +320,9 @@
             "000.SOUL.v1",
             "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1"
           ],
-          "backlinks": [],
+          "backlinks": [
+            "320.EXTENSION-AND-SCHEMA-RECIPES.v1"
+          ],
           "node_key": "310.WIKI-GRAPH-GUIDE.v1",
           "facet_tags": [
             "Library:Wiki:Guide:wiki"
@@ -705,8 +755,38 @@
     },
     "900": {
       "title": "900 Audits, Postmortems & Historical Ledgers (審計、事後檢討與歷史帳本)",
-      "count": 0,
-      "items": []
+      "count": 1,
+      "items": [
+        {
+          "node_id": "MEM-2026-0019",
+          "artifact_type": "digest",
+          "status": "verified",
+          "access_tier": "standard",
+          "priority": "normal",
+          "domain_code": "900",
+          "subdomain": null,
+          "artifact_track": "wiki",
+          "outbound_links": [],
+          "backlinks": [],
+          "node_key": "900.SESSION_DIGEST.v1",
+          "facet_tags": [
+            "Library:Wiki:Document:digest"
+          ],
+          "keywords": [
+            "SESSION_DIGEST",
+            "wiki"
+          ],
+          "summary_1line": "Episodic Session Digest Log documentation entry",
+          "path": "memory/episodic/SESSION_DIGEST.md",
+          "sha256_16": "efc1635b6a855503",
+          "author_model": "flash",
+          "reviewer_model": null,
+          "depends_on": [],
+          "affected_paths": [
+            "memory/episodic/SESSION_DIGEST.md"
+          ]
+        }
+      ]
     }
   },
   "causal_topology_edges": [
@@ -911,6 +991,21 @@
       "relation": "depends_on"
     },
     {
+      "from": "MEM-2026-0018",
+      "to": "MEM-2026-0001",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0018",
+      "to": "MEM-2026-0016",
+      "relation": "depends_on"
+    },
+    {
+      "from": "MEM-2026-0018",
+      "to": "MEM-2026-0015",
+      "relation": "depends_on"
+    },
+    {
       "from": "MEM-2026-0010",
       "to": "MEM-2026-0009",
       "relation": "supersedes"
@@ -992,5 +1087,1116 @@
       "to": "@earendil-works/pi-coding-agent",
       "type": "ts_sdk_import"
     }
-  ]
+  ],
+  "code_intelligence_map": {
+    "schemas/schema_validator.py": {
+      "file_path": "schemas/schema_validator.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "parse_markdown_frontmatter",
+          "kind": "function",
+          "line_start": 71,
+          "line_end": 86
+        },
+        {
+          "name": "count_prose_lines",
+          "kind": "function",
+          "line_start": 89,
+          "line_end": 115
+        },
+        {
+          "name": "check_as05_portability",
+          "kind": "function",
+          "line_start": 118,
+          "line_end": 127
+        },
+        {
+          "name": "load_all_memory_nodes",
+          "kind": "function",
+          "line_start": 130,
+          "line_end": 144
+        },
+        {
+          "name": "check_as06_node_exclusivity",
+          "kind": "function",
+          "line_start": 147,
+          "line_end": 186
+        },
+        {
+          "name": "detect_unlinked_topology_references",
+          "kind": "function",
+          "line_start": 189,
+          "line_end": 235
+        },
+        {
+          "name": "generate_prescription_skeleton",
+          "kind": "function",
+          "line_start": 238,
+          "line_end": 323
+        },
+        {
+          "name": "validate_against_schema",
+          "kind": "function",
+          "line_start": 326,
+          "line_end": 337
+        },
+        {
+          "name": "validate_document",
+          "kind": "function",
+          "line_start": 340,
+          "line_end": 484
+        },
+        {
+          "name": "check_topology_graph",
+          "kind": "function",
+          "line_start": 487,
+          "line_end": 531
+        },
+        {
+          "name": "main",
+          "kind": "function",
+          "line_start": 534,
+          "line_end": 608
+        }
+      ],
+      "pi_registrations": [],
+      "command_conflicts": [],
+      "imports": [],
+      "imported_by": [
+        "scripts/auto_update_map.py",
+        "scripts/sync_doc_metadata.py",
+        "scripts/test_friday_architecture.py"
+      ],
+      "governing_specs": [
+        {
+          "node_id": "MEM-2026-0004",
+          "node_key": "600.AUDIT-001.v1",
+          "summary_1line": "PotoTypeV0 專案與 Friday Agentic Harness 初始化驗收紀錄：記錄四大核心模組之驗收基準與依賴拓撲。",
+          "path": "memory/audits/MEM-2026-0004_HARNESS_INIT_AUDIT.md"
+        },
+        {
+          "node_id": "MEM-2026-0001",
+          "node_key": "000.SOUL.v1",
+          "summary_1line": "Friday Agentic Harness 核心憲法：定義四級認知誠實標籤、跨模型對抗審查與獨立驗證斷言 (Oracle) 鐵律。",
+          "path": "memory/codex/000_SOUL.md"
+        },
+        {
+          "node_id": "MEM-2026-0002",
+          "node_key": "100.ARCH-RULES.v1",
+          "summary_1line": "定義 Friday Harness 之工作區邊界護欄：鎖定 ctx.cwd、保護 .Friday 大腦核心 (SEC-BRAIN)、隔離金鑰 (SEC-CRED)、根目錄 .md 保護 (SEC-DOC-GOVERNANCE) 與攔截危險指令。",
+          "path": "memory/codex/100_ARCH_RULES.md"
+        },
+        {
+          "node_id": "MEM-2026-0003",
+          "node_key": "200.ADR-001.v1",
+          "summary_1line": "ADR-001：採用 Pi v1.3.0 registerVirtualModel 實作 pi-router/auto 動態路由，並配置 5 角色跨模型子代理協作團隊。",
+          "path": "memory/codex/200_DECISIONS.md"
+        },
+        {
+          "node_id": "MEM-2026-0007",
+          "node_key": "200.OPT-ROADMAP.v1",
+          "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
+          "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md"
+        },
+        {
+          "node_id": "MEM-2026-0012",
+          "node_key": "510.MODEL-POOL-PLANNING.v1",
+          "summary_1line": "NVIDIA 模型庫強項分配與被動斷路器 (Passive Circuit Breaker) 策略規範，釐清 models.json 與 models-store.json 定位，並定義不干擾 KV Cache 與 40 RPM 配額之健康管理。",
+          "path": "memory/specs/510.MODEL-POOL-PLANNING.v1.md"
+        },
+        {
+          "node_id": "MEM-2026-0010",
+          "node_key": "500.ROUTER-V2-MULTITURN.v1",
+          "summary_1line": "Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。",
+          "path": "memory/specs/610_ROUTER_V2_REDESIGN.md"
+        },
+        {
+          "node_id": "MEM-2026-0014",
+          "node_key": "500.HARNESS-DETAX.v1",
+          "summary_1line": "Friday 框架減稅與正交重構規格：消除雙重抽稅、賦予專家唯讀視野、收斂 SEC-DOC-GOVERNANCE 為根目錄保護並重構精簡角色 Prompt。",
+          "path": "memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md"
+        },
+        {
+          "node_id": "MEM-2026-0015",
+          "node_key": "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
+          "summary_1line": "圖書館/公文 Schema 擴充與雙腦絲滑分派總藍圖：確立記憶圖書館與 Wiki 為核心主題、改造無感透明代讀 Router 並定義 AGY Teamwork 分層派工矩陣。",
+          "path": "memory/specs/640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md"
+        },
+        {
+          "node_id": "MEM-2026-0005",
+          "node_key": "700.HARNESS-BLUEPRINT.v1",
+          "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
+          "path": "memory/specs/700_HARNESS_BLUEPRINT.md"
+        }
+      ]
+    },
+    "scripts/auto_update_map.py": {
+      "file_path": "scripts/auto_update_map.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "load_domain_layers",
+          "kind": "function",
+          "line_start": 45,
+          "line_end": 61
+        },
+        {
+          "name": "extract_wikilinks_outside_fenced_blocks",
+          "kind": "function",
+          "line_start": 71,
+          "line_end": 83
+        },
+        {
+          "name": "sha256_file",
+          "kind": "function",
+          "line_start": 90,
+          "line_end": 91
+        },
+        {
+          "name": "heal_dead_links",
+          "kind": "function",
+          "line_start": 94,
+          "line_end": 162
+        },
+        {
+          "name": "scan_code_dependencies",
+          "kind": "function",
+          "line_start": 165,
+          "line_end": 233
+        },
+        {
+          "name": "build_code_intelligence_map",
+          "kind": "function",
+          "line_start": 244,
+          "line_end": 387
+        },
+        {
+          "name": "is_private_memory_path",
+          "kind": "function",
+          "line_start": 390,
+          "line_end": 392
+        },
+        {
+          "name": "_compile_index_subset",
+          "kind": "function",
+          "line_start": 395,
+          "line_end": 598
+        },
+        {
+          "name": "build_context_index",
+          "kind": "function",
+          "line_start": 601,
+          "line_end": 603
+        },
+        {
+          "name": "build_public_and_private_indices",
+          "kind": "function",
+          "line_start": 606,
+          "line_end": 646
+        },
+        {
+          "name": "render_context_map_md",
+          "kind": "function",
+          "line_start": 649,
+          "line_end": 737
+        },
+        {
+          "name": "main",
+          "kind": "function",
+          "line_start": 740,
+          "line_end": 777
+        }
+      ],
+      "pi_registrations": [],
+      "command_conflicts": [],
+      "imports": [
+        "schemas/schema_validator.py"
+      ],
+      "imported_by": [
+        "scripts/test_friday_architecture.py"
+      ],
+      "governing_specs": [
+        {
+          "node_id": "MEM-2026-0004",
+          "node_key": "600.AUDIT-001.v1",
+          "summary_1line": "PotoTypeV0 專案與 Friday Agentic Harness 初始化驗收紀錄：記錄四大核心模組之驗收基準與依賴拓撲。",
+          "path": "memory/audits/MEM-2026-0004_HARNESS_INIT_AUDIT.md"
+        },
+        {
+          "node_id": "MEM-2026-0002",
+          "node_key": "100.ARCH-RULES.v1",
+          "summary_1line": "定義 Friday Harness 之工作區邊界護欄：鎖定 ctx.cwd、保護 .Friday 大腦核心 (SEC-BRAIN)、隔離金鑰 (SEC-CRED)、根目錄 .md 保護 (SEC-DOC-GOVERNANCE) 與攔截危險指令。",
+          "path": "memory/codex/100_ARCH_RULES.md"
+        },
+        {
+          "node_id": "MEM-2026-0007",
+          "node_key": "200.OPT-ROADMAP.v1",
+          "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
+          "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md"
+        },
+        {
+          "node_id": "MEM-2026-0014",
+          "node_key": "500.HARNESS-DETAX.v1",
+          "summary_1line": "Friday 框架減稅與正交重構規格：消除雙重抽稅、賦予專家唯讀視野、收斂 SEC-DOC-GOVERNANCE 為根目錄保護並重構精簡角色 Prompt。",
+          "path": "memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md"
+        },
+        {
+          "node_id": "MEM-2026-0015",
+          "node_key": "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
+          "summary_1line": "圖書館/公文 Schema 擴充與雙腦絲滑分派總藍圖：確立記憶圖書館與 Wiki 為核心主題、改造無感透明代讀 Router 並定義 AGY Teamwork 分層派工矩陣。",
+          "path": "memory/specs/640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md"
+        },
+        {
+          "node_id": "MEM-2026-0005",
+          "node_key": "700.HARNESS-BLUEPRINT.v1",
+          "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
+          "path": "memory/specs/700_HARNESS_BLUEPRINT.md"
+        },
+        {
+          "node_id": "MEM-2026-0018",
+          "node_key": "320.EXTENSION-AND-SCHEMA-RECIPES.v1",
+          "summary_1line": "Stage 6 Extension Recipes, Schema Guardrails, Unified /dream, Nemotron Web Research, and Code Intelligence Map",
+          "path": "memory/wiki/320_EXTENSION_AND_SCHEMA_RECIPES.md"
+        }
+      ]
+    },
+    "scripts/sync_doc_metadata.py": {
+      "file_path": "scripts/sync_doc_metadata.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "split_frontmatter_raw",
+          "kind": "function",
+          "line_start": 52,
+          "line_end": 59
+        },
+        {
+          "name": "surgical_set_scalar",
+          "kind": "function",
+          "line_start": 62,
+          "line_end": 88
+        },
+        {
+          "name": "surgical_remove_from_yaml_list",
+          "kind": "function",
+          "line_start": 91,
+          "line_end": 151
+        },
+        {
+          "name": "render_role_models_ssot_block",
+          "kind": "function",
+          "line_start": 154,
+          "line_end": 180
+        },
+        {
+          "name": "compute_actual_epistemic_counts",
+          "kind": "function",
+          "line_start": 183,
+          "line_end": 188
+        },
+        {
+          "name": "load_all_node_paths",
+          "kind": "function",
+          "line_start": 191,
+          "line_end": 214
+        },
+        {
+          "name": "sync_governed_markdown",
+          "kind": "function",
+          "line_start": 217,
+          "line_end": 369
+        },
+        {
+          "name": "allocate_next_node_id",
+          "kind": "function",
+          "line_start": 376,
+          "line_end": 399
+        },
+        {
+          "name": "init_governed_markdown",
+          "kind": "function",
+          "line_start": 402,
+          "line_end": 512
+        },
+        {
+          "name": "main",
+          "kind": "function",
+          "line_start": 515,
+          "line_end": 569
+        }
+      ],
+      "pi_registrations": [],
+      "command_conflicts": [],
+      "imports": [
+        "schemas/schema_validator.py"
+      ],
+      "imported_by": [
+        "scripts/test_friday_architecture.py"
+      ],
+      "governing_specs": [
+        {
+          "node_id": "MEM-2026-0007",
+          "node_key": "200.OPT-ROADMAP.v1",
+          "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
+          "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md"
+        },
+        {
+          "node_id": "MEM-2026-0006",
+          "node_key": "500.MODEL-APIKEY-SPEC.v1",
+          "summary_1line": "Friday 模型分配之 4 大設定位置（models.json、settings.json、model-router.ts、agents/*.md）與多組 API Key 分流配置規格。",
+          "path": "memory/specs/500_MODEL_APIKEY_GUIDE.md"
+        },
+        {
+          "node_id": "MEM-2026-0012",
+          "node_key": "510.MODEL-POOL-PLANNING.v1",
+          "summary_1line": "NVIDIA 模型庫強項分配與被動斷路器 (Passive Circuit Breaker) 策略規範，釐清 models.json 與 models-store.json 定位，並定義不干擾 KV Cache 與 40 RPM 配額之健康管理。",
+          "path": "memory/specs/510.MODEL-POOL-PLANNING.v1.md"
+        },
+        {
+          "node_id": "MEM-2026-0010",
+          "node_key": "500.ROUTER-V2-MULTITURN.v1",
+          "summary_1line": "Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。",
+          "path": "memory/specs/610_ROUTER_V2_REDESIGN.md"
+        },
+        {
+          "node_id": "MEM-2026-0015",
+          "node_key": "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
+          "summary_1line": "圖書館/公文 Schema 擴充與雙腦絲滑分派總藍圖：確立記憶圖書館與 Wiki 為核心主題、改造無感透明代讀 Router 並定義 AGY Teamwork 分層派工矩陣。",
+          "path": "memory/specs/640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md"
+        },
+        {
+          "node_id": "MEM-2026-0005",
+          "node_key": "700.HARNESS-BLUEPRINT.v1",
+          "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
+          "path": "memory/specs/700_HARNESS_BLUEPRINT.md"
+        }
+      ]
+    },
+    "scripts/test_friday_architecture.py": {
+      "file_path": "scripts/test_friday_architecture.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "build_env",
+          "kind": "function",
+          "line_start": 27,
+          "line_end": 32
+        },
+        {
+          "name": "test_1_schema_and_context_index",
+          "kind": "function",
+          "line_start": 35,
+          "line_end": 87
+        },
+        {
+          "name": "test_2_anti_sycophancy_trap",
+          "kind": "function",
+          "line_start": 90,
+          "line_end": 156
+        },
+        {
+          "name": "test_3_workspace_boundary_guard",
+          "kind": "function",
+          "line_start": 159,
+          "line_end": 217
+        },
+        {
+          "name": "test_4_virtual_router_and_progressive_disclosure",
+          "kind": "function",
+          "line_start": 220,
+          "line_end": 290
+        },
+        {
+          "name": "test_5_multi_agent_profiles",
+          "kind": "function",
+          "line_start": 293,
+          "line_end": 348
+        },
+        {
+          "name": "test_6_stage2_governance_and_ledger",
+          "kind": "function",
+          "line_start": 351,
+          "line_end": 375
+        },
+        {
+          "name": "test_7_stage3_workspace_guard_advanced",
+          "kind": "function",
+          "line_start": 378,
+          "line_end": 467
+        },
+        {
+          "name": "test_8_router_handoff_m1_to_m7",
+          "kind": "function",
+          "line_start": 470,
+          "line_end": 592
+        },
+        {
+          "name": "test_9_stage4_validator_prose_as05_as06_skeleton",
+          "kind": "function",
+          "line_start": 595,
+          "line_end": 760
+        },
+        {
+          "name": "test_10_stage5_auto_heal_ast_and_drift_alert",
+          "kind": "function",
+          "line_start": 763,
+          "line_end": 821
+        },
+        {
+          "name": "test_11_deterministic_hook_md_auto_sync",
+          "kind": "function",
+          "line_start": 824,
+          "line_end": 911
+        },
+        {
+          "name": "test_12_kv_cache_guard_usage_and_context_dashboard",
+          "kind": "function",
+          "line_start": 914,
+          "line_end": 965
+        },
+        {
+          "name": "test_13_library_wiki_taxonomy_and_seamless_offload",
+          "kind": "function",
+          "line_start": 968,
+          "line_end": 1226
+        },
+        {
+          "name": "test_14_stage6_dream_and_nemotron_web_research",
+          "kind": "function",
+          "line_start": 1229,
+          "line_end": 1423
+        },
+        {
+          "name": "main",
+          "kind": "function",
+          "line_start": 1426,
+          "line_end": 1444
+        }
+      ],
+      "pi_registrations": [],
+      "command_conflicts": [],
+      "imports": [
+        "scripts/auto_update_map.py",
+        "scripts/sync_doc_metadata.py",
+        "schemas/schema_validator.py"
+      ],
+      "imported_by": [],
+      "governing_specs": [
+        {
+          "node_id": "MEM-2026-0009",
+          "node_key": "600.AUDIT-002.v1",
+          "summary_1line": "WO-2026-R1 (M1~M7) 與 Stage 4~5 壓力測試驗收報告：記錄已通過之防禦機制與待修復之 4 項執行期瓶頸。",
+          "path": "memory/audits/MEM-2026-0009_ROUTER_STRESS_AUDIT.md"
+        },
+        {
+          "node_id": "MEM-2026-0010",
+          "node_key": "500.ROUTER-V2-MULTITURN.v1",
+          "summary_1line": "Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。",
+          "path": "memory/specs/610_ROUTER_V2_REDESIGN.md"
+        },
+        {
+          "node_id": "MEM-2026-0018",
+          "node_key": "320.EXTENSION-AND-SCHEMA-RECIPES.v1",
+          "summary_1line": "Stage 6 Extension Recipes, Schema Guardrails, Unified /dream, Nemotron Web Research, and Code Intelligence Map",
+          "path": "memory/wiki/320_EXTENSION_AND_SCHEMA_RECIPES.md"
+        }
+      ]
+    },
+    ".Friday/extensions/epistemic-gate.ts": {
+      "file_path": ".Friday/extensions/epistemic-gate.ts",
+      "language": "typescript",
+      "symbols": [
+        {
+          "name": "CATALOG_STAGE2_THRESHOLD",
+          "kind": "const",
+          "line_start": 19,
+          "line_end": 19
+        },
+        {
+          "name": "buildProgressiveContextSummary",
+          "kind": "function",
+          "line_start": 21,
+          "line_end": 21
+        },
+        {
+          "name": "findAffectedMemoryNodes",
+          "kind": "function",
+          "line_start": 108,
+          "line_end": 108
+        },
+        {
+          "name": "getSessionPinnedContextSummary",
+          "kind": "function",
+          "line_start": 153,
+          "line_end": 153
+        },
+        {
+          "name": "clearSessionPinnedContextSummaries",
+          "kind": "function",
+          "line_start": 164,
+          "line_end": 164
+        },
+        {
+          "name": "FridayEpistemicBridge",
+          "kind": "interface",
+          "line_start": 168,
+          "line_end": 168
+        },
+        {
+          "name": "queryLibraryNodes",
+          "kind": "function",
+          "line_start": 185,
+          "line_end": 185
+        },
+        {
+          "name": "fridayEpistemicBridge",
+          "kind": "const",
+          "line_start": 302,
+          "line_end": 302
+        }
+      ],
+      "pi_registrations": [
+        {
+          "kind": "tool",
+          "name": "query_library",
+          "line": 318
+        },
+        {
+          "kind": "hook",
+          "name": "session_shutdown",
+          "line": 340
+        },
+        {
+          "kind": "hook",
+          "name": "session_start",
+          "line": 392
+        },
+        {
+          "kind": "hook",
+          "name": "before_agent_start",
+          "line": 397
+        },
+        {
+          "kind": "hook",
+          "name": "tool_result",
+          "line": 412
+        }
+      ],
+      "command_conflicts": [],
+      "imports": [
+        "@earendil-works/pi-coding-agent"
+      ],
+      "imported_by": [],
+      "governing_specs": [
+        {
+          "node_id": "MEM-2026-0007",
+          "node_key": "200.OPT-ROADMAP.v1",
+          "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
+          "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md"
+        },
+        {
+          "node_id": "MEM-2026-0010",
+          "node_key": "500.ROUTER-V2-MULTITURN.v1",
+          "summary_1line": "Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。",
+          "path": "memory/specs/610_ROUTER_V2_REDESIGN.md"
+        },
+        {
+          "node_id": "MEM-2026-0014",
+          "node_key": "500.HARNESS-DETAX.v1",
+          "summary_1line": "Friday 框架減稅與正交重構規格：消除雙重抽稅、賦予專家唯讀視野、收斂 SEC-DOC-GOVERNANCE 為根目錄保護並重構精簡角色 Prompt。",
+          "path": "memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md"
+        },
+        {
+          "node_id": "MEM-2026-0015",
+          "node_key": "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
+          "summary_1line": "圖書館/公文 Schema 擴充與雙腦絲滑分派總藍圖：確立記憶圖書館與 Wiki 為核心主題、改造無感透明代讀 Router 並定義 AGY Teamwork 分層派工矩陣。",
+          "path": "memory/specs/640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md"
+        },
+        {
+          "node_id": "MEM-2026-0005",
+          "node_key": "700.HARNESS-BLUEPRINT.v1",
+          "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
+          "path": "memory/specs/700_HARNESS_BLUEPRINT.md"
+        },
+        {
+          "node_id": "MEM-2026-0018",
+          "node_key": "320.EXTENSION-AND-SCHEMA-RECIPES.v1",
+          "summary_1line": "Stage 6 Extension Recipes, Schema Guardrails, Unified /dream, Nemotron Web Research, and Code Intelligence Map",
+          "path": "memory/wiki/320_EXTENSION_AND_SCHEMA_RECIPES.md"
+        }
+      ]
+    },
+    ".Friday/extensions/model-router.ts": {
+      "file_path": ".Friday/extensions/model-router.ts",
+      "language": "typescript",
+      "symbols": [
+        {
+          "name": "FridayEpistemicBridge",
+          "kind": "interface",
+          "line_start": 33,
+          "line_end": 33
+        },
+        {
+          "name": "DEFAULT_ROLE_MODELS",
+          "kind": "const",
+          "line_start": 80,
+          "line_end": 80
+        },
+        {
+          "name": "RoleName",
+          "kind": "type",
+          "line_start": 90,
+          "line_end": 90
+        },
+        {
+          "name": "SpecialistRole",
+          "kind": "type",
+          "line_start": 91,
+          "line_end": 91
+        },
+        {
+          "name": "StrategyMode",
+          "kind": "type",
+          "line_start": 92,
+          "line_end": 92
+        },
+        {
+          "name": "ROLE_FALLBACK_CHAINS",
+          "kind": "const",
+          "line_start": 95,
+          "line_end": 95
+        },
+        {
+          "name": "ROLE_MODELS",
+          "kind": "const",
+          "line_start": 141,
+          "line_end": 141
+        },
+        {
+          "name": "syncNvidiaModelsFromStore",
+          "kind": "function",
+          "line_start": 221,
+          "line_end": 221
+        },
+        {
+          "name": "pruneDeprecatedModelFromModelsJson",
+          "kind": "function",
+          "line_start": 336,
+          "line_end": 336
+        },
+        {
+          "name": "getProviderKeyPool",
+          "kind": "function",
+          "line_start": 467,
+          "line_end": 467
+        },
+        {
+          "name": "saveProviderKeyPool",
+          "kind": "function",
+          "line_start": 494,
+          "line_end": 494
+        },
+        {
+          "name": "acquireStickyProviderKey",
+          "kind": "function",
+          "line_start": 521,
+          "line_end": 521
+        },
+        {
+          "name": "buildSpecialistTools",
+          "kind": "function",
+          "line_start": 663,
+          "line_end": 663
+        },
+        {
+          "name": "executeSpecialistToolCall",
+          "kind": "function",
+          "line_start": 690,
+          "line_end": 690
+        },
+        {
+          "name": "hasImageAttachment",
+          "kind": "function",
+          "line_start": 882,
+          "line_end": 882
+        }
+      ],
+      "pi_registrations": [
+        {
+          "kind": "hook",
+          "name": "session_start",
+          "line": 1069
+        },
+        {
+          "kind": "hook",
+          "name": "session_shutdown",
+          "line": 1074
+        },
+        {
+          "kind": "hook",
+          "name": "turn_start",
+          "line": 1146
+        },
+        {
+          "kind": "hook",
+          "name": "before_agent_start",
+          "line": 1150
+        },
+        {
+          "kind": "hook",
+          "name": "tool_call",
+          "line": 1270
+        },
+        {
+          "kind": "tool",
+          "name": "dispatch_specialist",
+          "line": 1394
+        },
+        {
+          "kind": "command",
+          "name": "/mode",
+          "line": 2595
+        },
+        {
+          "kind": "command",
+          "name": "/context",
+          "line": 3204
+        }
+      ],
+      "command_conflicts": [],
+      "imports": [
+        "@earendil-works/pi-ai",
+        "@earendil-works/pi-coding-agent"
+      ],
+      "imported_by": [],
+      "governing_specs": [
+        {
+          "node_id": "MEM-2026-0009",
+          "node_key": "600.AUDIT-002.v1",
+          "summary_1line": "WO-2026-R1 (M1~M7) 與 Stage 4~5 壓力測試驗收報告：記錄已通過之防禦機制與待修復之 4 項執行期瓶頸。",
+          "path": "memory/audits/MEM-2026-0009_ROUTER_STRESS_AUDIT.md"
+        },
+        {
+          "node_id": "MEM-2026-0007",
+          "node_key": "200.OPT-ROADMAP.v1",
+          "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
+          "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md"
+        },
+        {
+          "node_id": "MEM-2026-0006",
+          "node_key": "500.MODEL-APIKEY-SPEC.v1",
+          "summary_1line": "Friday 模型分配之 4 大設定位置（models.json、settings.json、model-router.ts、agents/*.md）與多組 API Key 分流配置規格。",
+          "path": "memory/specs/500_MODEL_APIKEY_GUIDE.md"
+        },
+        {
+          "node_id": "MEM-2026-0012",
+          "node_key": "510.MODEL-POOL-PLANNING.v1",
+          "summary_1line": "NVIDIA 模型庫強項分配與被動斷路器 (Passive Circuit Breaker) 策略規範，釐清 models.json 與 models-store.json 定位，並定義不干擾 KV Cache 與 40 RPM 配額之健康管理。",
+          "path": "memory/specs/510.MODEL-POOL-PLANNING.v1.md"
+        },
+        {
+          "node_id": "MEM-2026-0010",
+          "node_key": "500.ROUTER-V2-MULTITURN.v1",
+          "summary_1line": "Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。",
+          "path": "memory/specs/610_ROUTER_V2_REDESIGN.md"
+        },
+        {
+          "node_id": "MEM-2026-0011",
+          "node_key": "500.PULSE-SCHEDULER.v1",
+          "summary_1line": "Friday Pulse 智慧背景排程初步藍圖：定義定時/事件/動態心跳三模態觸發、免費 Scout 前哨過濾與收件匣隔離簽核機制。",
+          "path": "memory/specs/620_FRIDAY_PULSE_SCHEDULER_SPEC.md"
+        },
+        {
+          "node_id": "MEM-2026-0014",
+          "node_key": "500.HARNESS-DETAX.v1",
+          "summary_1line": "Friday 框架減稅與正交重構規格：消除雙重抽稅、賦予專家唯讀視野、收斂 SEC-DOC-GOVERNANCE 為根目錄保護並重構精簡角色 Prompt。",
+          "path": "memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md"
+        },
+        {
+          "node_id": "MEM-2026-0015",
+          "node_key": "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
+          "summary_1line": "圖書館/公文 Schema 擴充與雙腦絲滑分派總藍圖：確立記憶圖書館與 Wiki 為核心主題、改造無感透明代讀 Router 並定義 AGY Teamwork 分層派工矩陣。",
+          "path": "memory/specs/640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md"
+        },
+        {
+          "node_id": "MEM-2026-0005",
+          "node_key": "700.HARNESS-BLUEPRINT.v1",
+          "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
+          "path": "memory/specs/700_HARNESS_BLUEPRINT.md"
+        }
+      ]
+    },
+    ".Friday/extensions/subagent/agents.ts": {
+      "file_path": ".Friday/extensions/subagent/agents.ts",
+      "language": "typescript",
+      "symbols": [
+        {
+          "name": "AgentScope",
+          "kind": "type",
+          "line_start": 9,
+          "line_end": 9
+        },
+        {
+          "name": "AgentConfig",
+          "kind": "interface",
+          "line_start": 11,
+          "line_end": 11
+        },
+        {
+          "name": "AgentDiscoveryResult",
+          "kind": "interface",
+          "line_start": 21,
+          "line_end": 21
+        },
+        {
+          "name": "discoverAgents",
+          "kind": "function",
+          "line_start": 128,
+          "line_end": 128
+        },
+        {
+          "name": "formatAgentList",
+          "kind": "function",
+          "line_start": 149,
+          "line_end": 149
+        }
+      ],
+      "pi_registrations": [],
+      "command_conflicts": [],
+      "imports": [
+        "@earendil-works/pi-coding-agent"
+      ],
+      "imported_by": [
+        ".Friday/extensions/subagent/index.ts"
+      ],
+      "governing_specs": []
+    },
+    ".Friday/extensions/subagent/index.ts": {
+      "file_path": ".Friday/extensions/subagent/index.ts",
+      "language": "typescript",
+      "symbols": [],
+      "pi_registrations": [
+        {
+          "kind": "tool",
+          "name": "subagent",
+          "line": 549
+        }
+      ],
+      "command_conflicts": [],
+      "imports": [
+        "@earendil-works/pi-agent-core",
+        "@earendil-works/pi-ai",
+        "@earendil-works/pi-coding-agent",
+        "@earendil-works/pi-tui",
+        ".Friday/extensions/subagent/agents.ts"
+      ],
+      "imported_by": [],
+      "governing_specs": [
+        {
+          "node_id": "MEM-2026-0010",
+          "node_key": "500.ROUTER-V2-MULTITURN.v1",
+          "summary_1line": "Router v2 架構重構規格：定義多輪累進專家迴圈、同迴圈 Sticky Key 池 (遇 429 等待 RPM 恢復) 與 Hook 自動化文件同步藍圖。",
+          "path": "memory/specs/610_ROUTER_V2_REDESIGN.md"
+        },
+        {
+          "node_id": "MEM-2026-0015",
+          "node_key": "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
+          "summary_1line": "圖書館/公文 Schema 擴充與雙腦絲滑分派總藍圖：確立記憶圖書館與 Wiki 為核心主題、改造無感透明代讀 Router 並定義 AGY Teamwork 分層派工矩陣。",
+          "path": "memory/specs/640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md"
+        },
+        {
+          "node_id": "MEM-2026-0005",
+          "node_key": "700.HARNESS-BLUEPRINT.v1",
+          "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
+          "path": "memory/specs/700_HARNESS_BLUEPRINT.md"
+        }
+      ]
+    },
+    ".Friday/extensions/web-research.ts": {
+      "file_path": ".Friday/extensions/web-research.ts",
+      "language": "typescript",
+      "symbols": [
+        {
+          "name": "OutboundCheckResult",
+          "kind": "interface",
+          "line_start": 5,
+          "line_end": 5
+        },
+        {
+          "name": "WebPageSnippet",
+          "kind": "interface",
+          "line_start": 10,
+          "line_end": 10
+        },
+        {
+          "name": "NemotronGuardVerdict",
+          "kind": "interface",
+          "line_start": 17,
+          "line_end": 17
+        },
+        {
+          "name": "IPI_DETERMINISTIC_RE",
+          "kind": "const",
+          "line_start": 32,
+          "line_end": 32
+        },
+        {
+          "name": "validateOutboundSafety",
+          "kind": "function",
+          "line_start": 35,
+          "line_end": 35
+        },
+        {
+          "name": "loadNvidiaApiKeys",
+          "kind": "function",
+          "line_start": 74,
+          "line_end": 74
+        },
+        {
+          "name": "htmlToCleanMarkdown",
+          "kind": "function",
+          "line_start": 110,
+          "line_end": 110
+        },
+        {
+          "name": "hybridSearchAndFetch",
+          "kind": "function",
+          "line_start": 140,
+          "line_end": 140
+        },
+        {
+          "name": "evaluateWebContentWithNemotronGuard",
+          "kind": "function",
+          "line_start": 317,
+          "line_end": 317
+        },
+        {
+          "name": "synthesizeWithScout",
+          "kind": "function",
+          "line_start": 419,
+          "line_end": 419
+        },
+        {
+          "name": "registerWebResearchExtension",
+          "kind": "function",
+          "line_start": 510,
+          "line_end": 510
+        }
+      ],
+      "pi_registrations": [
+        {
+          "kind": "tool",
+          "name": "web_research",
+          "line": 513
+        }
+      ],
+      "command_conflicts": [],
+      "imports": [],
+      "imported_by": [],
+      "governing_specs": [
+        {
+          "node_id": "MEM-2026-0018",
+          "node_key": "320.EXTENSION-AND-SCHEMA-RECIPES.v1",
+          "summary_1line": "Stage 6 Extension Recipes, Schema Guardrails, Unified /dream, Nemotron Web Research, and Code Intelligence Map",
+          "path": "memory/wiki/320_EXTENSION_AND_SCHEMA_RECIPES.md"
+        }
+      ]
+    },
+    ".Friday/extensions/workspace-guard.ts": {
+      "file_path": ".Friday/extensions/workspace-guard.ts",
+      "language": "typescript",
+      "symbols": [
+        {
+          "name": "formatRemediation",
+          "kind": "function",
+          "line_start": 110,
+          "line_end": 110
+        },
+        {
+          "name": "parseShellCommandQuoteAware",
+          "kind": "function",
+          "line_start": 122,
+          "line_end": 122
+        },
+        {
+          "name": "isReadOnlyBashCommand",
+          "kind": "function",
+          "line_start": 248,
+          "line_end": 248
+        },
+        {
+          "name": "checkPortabilityViolation",
+          "kind": "function",
+          "line_start": 315,
+          "line_end": 315
+        },
+        {
+          "name": "extractPathsFromBash",
+          "kind": "function",
+          "line_start": 365,
+          "line_end": 365
+        }
+      ],
+      "pi_registrations": [
+        {
+          "kind": "hook",
+          "name": "session_start",
+          "line": 558
+        },
+        {
+          "kind": "hook",
+          "name": "user_bash",
+          "line": 564
+        },
+        {
+          "kind": "hook",
+          "name": "tool_call",
+          "line": 588
+        },
+        {
+          "kind": "command",
+          "name": "/guard",
+          "line": 724
+        }
+      ],
+      "command_conflicts": [],
+      "imports": [
+        "@earendil-works/pi-coding-agent"
+      ],
+      "imported_by": [],
+      "governing_specs": [
+        {
+          "node_id": "MEM-2026-0007",
+          "node_key": "200.OPT-ROADMAP.v1",
+          "summary_1line": "PotoTypeV0 × Friday 六階段通用優化、固定主腦調度、防錯亂保險 (AS-05/AS-06/Drift Alert) 與 /dream 夢境記憶整理演進路線圖。",
+          "path": "memory/specs/200_OPTIMIZATION_ROADMAP.md"
+        },
+        {
+          "node_id": "MEM-2026-0011",
+          "node_key": "500.PULSE-SCHEDULER.v1",
+          "summary_1line": "Friday Pulse 智慧背景排程初步藍圖：定義定時/事件/動態心跳三模態觸發、免費 Scout 前哨過濾與收件匣隔離簽核機制。",
+          "path": "memory/specs/620_FRIDAY_PULSE_SCHEDULER_SPEC.md"
+        },
+        {
+          "node_id": "MEM-2026-0014",
+          "node_key": "500.HARNESS-DETAX.v1",
+          "summary_1line": "Friday 框架減稅與正交重構規格：消除雙重抽稅、賦予專家唯讀視野、收斂 SEC-DOC-GOVERNANCE 為根目錄保護並重構精簡角色 Prompt。",
+          "path": "memory/specs/630_HARNESS_DETAX_AND_PROMPT_ORTHOGONALITY.md"
+        },
+        {
+          "node_id": "MEM-2026-0015",
+          "node_key": "300.LIBRARY-WIKI-AND-SEAMLESS-ROUTER.v1",
+          "summary_1line": "圖書館/公文 Schema 擴充與雙腦絲滑分派總藍圖：確立記憶圖書館與 Wiki 為核心主題、改造無感透明代讀 Router 並定義 AGY Teamwork 分層派工矩陣。",
+          "path": "memory/specs/640_MODULAR_PLUGIN_AND_HOOK_BLUEPRINT.md"
+        },
+        {
+          "node_id": "MEM-2026-0005",
+          "node_key": "700.HARNESS-BLUEPRINT.v1",
+          "summary_1line": "Friday × PotoTypeV0 雙層可攜式 Agentic Harness 完整架構藍圖、四大生命週期與全文件 Schema 防錯亂機制。",
+          "path": "memory/specs/700_HARNESS_BLUEPRINT.md"
+        }
+      ]
+    }
+  }
 }

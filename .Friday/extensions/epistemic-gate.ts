@@ -188,6 +188,8 @@ export function queryLibraryNodes(
 		domain?: string;
 		query?: string;
 		node_key?: string;
+		artifact_type?: string;
+		tag?: string;
 		include_neighbors?: boolean;
 		limit?: number;
 	},
@@ -197,30 +199,98 @@ export function queryLibraryNodes(
 	const indexPaths = [indexPath, privatePath].filter((p) => fs.existsSync(p));
 	if (indexPaths.length === 0) return [];
 
-	let results: any[] = [];
+	const allNodesByKey = new Map<string, any>();
+	const codeIntelMap: Record<string, any> = {};
+	const candidateItems: any[] = [];
+
 	for (const p of indexPaths) {
 		try {
 			const index = JSON.parse(fs.readFileSync(p, "utf-8"));
+			if (index.code_intelligence_map && typeof index.code_intelligence_map === "object") {
+				Object.assign(codeIntelMap, index.code_intelligence_map);
+			}
 			for (const sec of Object.values<any>(index.domain_registry ?? {})) {
 				for (const it of sec.items ?? []) {
-					if (params.domain && it.domain_code !== params.domain && it.subdomain !== params.domain) continue;
-					if (params.node_key && it.node_key !== params.node_key && it.node_id !== params.node_key) continue;
-					if (params.query) {
-						const q = params.query.toLowerCase();
-						const matched =
-							(it.node_key ?? "").toLowerCase().includes(q) ||
-							(it.node_id ?? "").toLowerCase().includes(q) ||
-							(it.summary_1line ?? "").toLowerCase().includes(q) ||
-							(it.path ?? "").toLowerCase().includes(q) ||
-							(Array.isArray(it.keywords) && it.keywords.some((k: string) => k.toLowerCase().includes(q)));
-						if (!matched) continue;
-					}
-					results.push(it);
+					if (it.node_key) allNodesByKey.set(it.node_key, it);
+					if (it.node_id) allNodesByKey.set(it.node_id, it);
+					candidateItems.push(it);
 				}
 			}
 		} catch {
 			// ignore parse errors
 		}
+	}
+
+	let results: any[] = [];
+	for (const it of candidateItems) {
+		if (params.domain && it.domain_code !== params.domain && it.subdomain !== params.domain) continue;
+		if (params.node_key && it.node_key !== params.node_key && it.node_id !== params.node_key) continue;
+		if (params.artifact_type && it.artifact_type !== params.artifact_type) continue;
+		if (params.tag) {
+			const tagLower = params.tag.toLowerCase();
+			const tags: string[] = [
+				...(Array.isArray(it.facet_tags) ? it.facet_tags : []),
+				...(Array.isArray(it.keywords) ? it.keywords : []),
+			];
+			if (!tags.some((t) => String(t).toLowerCase() === tagLower)) continue;
+		}
+		if (params.query) {
+			const q = params.query.toLowerCase();
+			const matched =
+				(it.node_key ?? "").toLowerCase().includes(q) ||
+				(it.node_id ?? "").toLowerCase().includes(q) ||
+				(it.summary_1line ?? "").toLowerCase().includes(q) ||
+				(it.path ?? "").toLowerCase().includes(q) ||
+				(Array.isArray(it.keywords) && it.keywords.some((k: string) => String(k).toLowerCase().includes(q))) ||
+				(Array.isArray(it.facet_tags) && it.facet_tags.some((t: string) => String(t).toLowerCase().includes(q))) ||
+				(Array.isArray(it.affected_paths) && it.affected_paths.some((ap: string) => String(ap).toLowerCase().includes(q)));
+			if (!matched) continue;
+		}
+
+		const enriched: any = { ...it };
+		if (params.include_neighbors !== false) {
+			const neighborKeys = new Set<string>([
+				...(Array.isArray(it.outbound_links) ? it.outbound_links : []),
+				...(Array.isArray(it.backlinks) ? it.backlinks : []),
+				...(Array.isArray(it.depends_on) ? it.depends_on : []),
+			]);
+			enriched.neighbor_summaries = Array.from(neighborKeys)
+				.map((k) => {
+					const target = allNodesByKey.get(k);
+					return target
+						? {
+								node_key: target.node_key,
+								node_id: target.node_id,
+								summary_1line: target.summary_1line,
+								path: target.path,
+							}
+						: { node_key: k, unresolved: true };
+				});
+		}
+
+		const affPaths: string[] = Array.isArray(it.affected_paths) ? it.affected_paths : [];
+		const matchedCodeIntel: any[] = [];
+		for (const [codePath, info] of Object.entries(codeIntelMap)) {
+			const byAffected = affPaths.some(
+				(ap) =>
+					codePath === ap ||
+					codePath.startsWith(ap.replace(/\/$/, "") + "/") ||
+					ap.endsWith(path.basename(codePath)),
+			);
+			const byQuery =
+				params.query &&
+				(codePath.toLowerCase().includes(params.query.toLowerCase()) ||
+					(Array.isArray(info.symbols) &&
+						info.symbols.some((s: any) => String(s.name).toLowerCase().includes(params.query!.toLowerCase()))));
+			if (byAffected || byQuery) {
+				matchedCodeIntel.push(info);
+			}
+		}
+		if (matchedCodeIntel.length > 0) {
+			enriched.code_intelligence = matchedCodeIntel;
+		}
+
+		results.push(enriched);
 	}
 
 	if (params.limit && params.limit > 0) {
@@ -247,14 +317,16 @@ export default function (pi: ExtensionAPI) {
 
 	pi.registerTool({
 		name: "query_library",
-		description: "Query Friday Library Context Index and bidirectional wiki graph.",
+		description: "Query Friday Library Context Index, bidirectional wiki graph, and AST code intelligence map.",
 		parameters: {
 			type: "object",
 			properties: {
 				domain: { type: "string", description: "3-digit domain classification code" },
-				query: { type: "string", description: "Keyword search in node_key, summary, and keywords" },
+				query: { type: "string", description: "Keyword search in node_key, summary, keywords, facet_tags, and affected_paths" },
 				node_key: { type: "string", description: "Exact node key lookup" },
-				include_neighbors: { type: "boolean", description: "Whether to return outbound_links and backlinks" },
+				artifact_type: { type: "string", description: "Filter by artifact_type (spec, audit, wiki, digest, reference)" },
+				tag: { type: "string", description: "Filter by exact facet_tag or keyword" },
+				include_neighbors: { type: "boolean", description: "Whether to return resolved 1-hop neighbor summaries" },
 				limit: { type: "number", description: "Max results to return" },
 			},
 		},
@@ -263,18 +335,59 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerCommand("dream", {
-		description: "Consolidate scratch drafts into memory/wiki/ and rebuild knowledge graph",
-		handler: async (_args: string, ctx: any) => {
-			const dreamPromptPath = path.join(ctx.cwd, ".Friday", "prompts", "dream.md");
-			let promptText = "";
-			if (fs.existsSync(dreamPromptPath)) {
-				promptText = fs.readFileSync(dreamPromptPath, "utf-8");
+	// [Stage 6 Fix] Unified /dream entry point is served exclusively via .Friday/prompts/dream.md.
+	// Deterministic session consolidation runs automatically on session_shutdown:
+	pi.on("session_shutdown", async (_event: any, ctx: any) => {
+		const cwd = ctx?.cwd || process.cwd();
+		try {
+			const episodicDir = path.join(cwd, "memory", "episodic");
+			fs.mkdirSync(episodicDir, { recursive: true });
+			const digestRelPath = "memory/episodic/SESSION_DIGEST.md";
+			const digestAbsPath = path.join(cwd, digestRelPath);
+			const syncScript = path.join(cwd, "scripts", "sync_doc_metadata.py");
+
+			if (!fs.existsSync(digestAbsPath) && fs.existsSync(syncScript)) {
+				execFileSync(
+					"python3",
+					[
+						syncScript,
+						"--init",
+						"--type",
+						"digest",
+						"--domain",
+						"900",
+						"--title",
+						"Episodic Session Digest Log",
+						"--file",
+						digestRelPath,
+					],
+					{ cwd, stdio: "pipe", timeout: 8000 },
+				);
 			}
-			return {
-				output: `[Friday /dream Pipeline Activated]\nPrompt: ${dreamPromptPath}\n${promptText ? `\n${promptText}` : ""}`,
-			};
-		},
+
+			const ts = new Date().toISOString();
+			const entryLine = `\n- \`${ts}\` | Session shutdown auto-consolidated (` +
+				`pinned=${sessionPinnedSummaries.size}).\n`;
+			if (fs.existsSync(digestAbsPath)) {
+				fs.appendFileSync(digestAbsPath, entryLine, "utf-8");
+				if (fs.existsSync(syncScript)) {
+					execFileSync("python3", [syncScript, "--file", digestRelPath], {
+						cwd,
+						stdio: "pipe",
+						timeout: 8000,
+					});
+				}
+			}
+
+			const mapScript = path.join(cwd, "scripts", "auto_update_map.py");
+			if (fs.existsSync(mapScript)) {
+				execFileSync("python3", [mapScript], { cwd, stdio: "pipe", timeout: 10000 });
+			}
+		} catch {
+			// Best-effort deterministic consolidation on shutdown
+		} finally {
+			clearSessionPinnedContextSummaries();
+		}
 	});
 	pi.on("session_start", async (_event, ctx) => {
 		const sessionKey = `${ctx.sessionManager?.getSessionId?.() ?? "default"}::${ctx.cwd}`;
